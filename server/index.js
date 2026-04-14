@@ -183,13 +183,16 @@ io.on("connection", (socket) => {
 
   // ------ ホスト ------
   socket.on("host:join", ({ password } = {}) => {
+    console.log(`[host:join] from ${socket.id}`);
     // HOST_PASSWORD が設定されていれば一致チェック
     if (HOST_PASSWORD && password !== HOST_PASSWORD) {
+      console.log(`[host:join] auth failed for ${socket.id}`);
       socket.emit("host:authFailed", "ホスト用パスワードが正しくありません。");
       return;
     }
     socket.data.isHost = true;
     socket.join("host");
+    console.log(`[host:join] ${socket.id} authenticated, phase=${state.phase}`);
     socket.emit("host:authOk");
     socket.emit("host:update", {
       drawnNumbers: state.drawnNumbers,
@@ -205,7 +208,13 @@ io.on("connection", (socket) => {
 
   // 景品数を設定 (その後 prizeInput フェーズに移行)
   socket.on("host:setPrizeCount", ({ count }) => {
-    if (!isHost(socket)) return;
+    console.log(
+      `[host:setPrizeCount] from ${socket.id} isHost=${isHost(socket)} count=${count}`,
+    );
+    if (!isHost(socket)) {
+      socket.emit("error:message", "ホスト認証が切れました。ページを再読み込みしてください。");
+      return;
+    }
     const n = Number(count);
     if (!Number.isInteger(n) || n < 1 || n > 50) {
       socket.emit("error:message", "景品数は 1〜50 の範囲で指定してください。");
@@ -222,19 +231,23 @@ io.on("connection", (socket) => {
 
   // 景品名を一括で設定 (設定後 playing フェーズに移行)
   socket.on("host:setPrizeNames", ({ names }) => {
-    if (!isHost(socket)) return;
+    console.log(
+      `[host:setPrizeNames] from ${socket.id} isHost=${isHost(socket)} names=`,
+      names,
+      `state.prizeCount=${state.prizeCount} state.phase=${state.phase}`,
+    );
+    if (!isHost(socket)) {
+      socket.emit("error:message", "ホスト認証が切れました。ページを再読み込みしてください。");
+      return;
+    }
     if (!Array.isArray(names)) {
       socket.emit("error:message", "景品名のデータ形式が正しくありません。");
       return;
     }
-    if (names.length !== state.prizeCount) {
-      socket.emit(
-        "error:message",
-        `景品名の数 (${names.length}) が景品数 (${state.prizeCount}) と一致しません。`,
-      );
-      return;
-    }
-    state.prizeNames = names.map((v, i) =>
+    // prizeCount に満たない/超える場合は自動で調整して受理する (UI 同期の race 防止)
+    let adjusted = names.slice(0, state.prizeCount);
+    while (adjusted.length < state.prizeCount) adjusted.push("");
+    state.prizeNames = adjusted.map((v, i) =>
       typeof v === "string" && v.trim() ? v.trim() : `景品 ${i + 1}`,
     );
     state.phase = "playing";

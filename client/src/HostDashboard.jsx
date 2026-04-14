@@ -23,12 +23,14 @@ export default function HostDashboard() {
 
   useEffect(() => {
     const joinHost = () => {
-      // まずパスワードなしで試す
       const saved = sessionStorage.getItem("bingoex:hostPassword") || "";
+      console.log("[joinHost] emitting host:join");
       socket.emit("host:join", { password: saved });
     };
-    if (socket.connected) joinHost();
+    // 接続中でも必ず一度 emit (socket.io がバッファしてくれる)
+    joinHost();
     socket.on("connect", joinHost);
+    socket.on("reconnect", joinHost);
 
     socket.on("host:authOk", () => {
       setAuthed(true);
@@ -46,19 +48,20 @@ export default function HostDashboard() {
     });
 
     socket.on("host:update", (s) => {
+      console.log("[host:update]", s.phase, "prizeCount=", s.prizeCount);
       setState(s);
-      // prizeNamesInputs がまだ空で、サーバー側に保存されている景品名があれば同期
+      // prizeInput フェーズのときだけ景品名入力欄を景品数に合わせる
       setPrizeNameInputs((current) => {
-        if (current.length === 0 && Array.isArray(s.prizeNames) && s.prizeNames.length > 0) {
-          return [...s.prizeNames];
+        if (s.phase !== "prizeInput") return current;
+        const next = current.slice(0, s.prizeCount);
+        while (next.length < s.prizeCount) next.push("");
+        // サーバー側に保存されている景品名があれば、まだ空欄のインデックスを埋める
+        if (Array.isArray(s.prizeNames)) {
+          for (let i = 0; i < s.prizeCount; i++) {
+            if (!next[i] && s.prizeNames[i]) next[i] = s.prizeNames[i];
+          }
         }
-        // phase が prizeInput になっていて長さが景品数と異なれば整形
-        if (s.phase === "prizeInput" && current.length !== s.prizeCount) {
-          const next = current.slice(0, s.prizeCount);
-          while (next.length < s.prizeCount) next.push("");
-          return next;
-        }
-        return current;
+        return next;
       });
       setPrizeCountInput(String(s.prizeCount));
     });
@@ -75,6 +78,7 @@ export default function HostDashboard() {
 
     return () => {
       socket.off("connect", joinHost);
+      socket.off("reconnect", joinHost);
       socket.off("host:authOk");
       socket.off("host:authFailed");
       socket.off("host:update");
@@ -106,7 +110,12 @@ export default function HostDashboard() {
 
   const handleSubmitPrizeNames = (e) => {
     e.preventDefault();
-    const cleaned = prizeNameInputs.map((v, i) => (v && v.trim() ? v.trim() : `景品 ${i + 1}`));
+    // 長さを state.prizeCount に強制的に合わせる (UI 同期の race 対策)
+    const target = state.prizeCount || prizeNameInputs.length || 0;
+    const padded = prizeNameInputs.slice(0, target);
+    while (padded.length < target) padded.push("");
+    const cleaned = padded.map((v, i) => (v && v.trim() ? v.trim() : `景品 ${i + 1}`));
+    console.log("[submit prize names]", cleaned);
     socket.emit("host:setPrizeNames", { names: cleaned });
   };
 

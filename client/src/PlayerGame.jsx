@@ -27,11 +27,14 @@ export default function PlayerGame() {
     setMyName(name);
 
     const joinNow = () => {
-      socket.emit("player:join", { playerId, token, name });
+      const pid = localStorage.getItem("bingoex:playerId");
+      const tok = localStorage.getItem("bingoex:token");
+      socket.emit("player:join", { playerId: pid, token: tok, name });
     };
 
-    if (socket.connected) joinNow();
+    joinNow();
     socket.on("connect", joinNow);
+    socket.on("reconnect", joinNow);
 
     socket.on("player:joined", ({ playerId: newId, token: newToken, card }) => {
       if (newId) localStorage.setItem("bingoex:playerId", newId);
@@ -59,6 +62,7 @@ export default function PlayerGame() {
 
     return () => {
       socket.off("connect", joinNow);
+      socket.off("reconnect", joinNow);
       socket.off("player:joined");
       socket.off("player:card");
       socket.off("state:update");
