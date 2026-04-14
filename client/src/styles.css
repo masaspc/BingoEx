@@ -12,6 +12,11 @@
   --danger: #ef4444;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  /* iPhone ノッチ対応 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 * {
@@ -28,6 +33,9 @@ body,
     "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
   color: var(--text);
   background: linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #0f172a 100%);
+  -webkit-tap-highlight-color: transparent;
+  /* スマホのスクロール時のゴム効果は許可 */
+  -webkit-text-size-adjust: 100%;
 }
 
 .screen {
@@ -103,7 +111,8 @@ body,
 .text-input {
   width: 100%;
   padding: 12px 14px;
-  font-size: 1rem;
+  /* iOS の自動ズーム抑止のため 16px 以上必須 */
+  font-size: 16px;
   border: 2px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
@@ -117,7 +126,7 @@ body,
 }
 
 .btn {
-  padding: 10px 18px;
+  padding: 12px 20px;
   border-radius: 10px;
   border: none;
   background: #e2e8f0;
@@ -126,6 +135,8 @@ body,
   font-weight: 600;
   font-size: 1rem;
   transition: transform 0.15s ease, box-shadow 0.2s;
+  /* タッチターゲットの最小サイズ */
+  min-height: 44px;
 }
 
 .btn:disabled {
@@ -136,6 +147,10 @@ body,
 .btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn-primary {
@@ -150,9 +165,10 @@ body,
 }
 
 .btn-lg {
-  padding: 16px 28px;
+  padding: 18px 32px;
   font-size: 1.2rem;
   border-radius: 14px;
+  min-height: 56px;
 }
 
 .inline-form {
@@ -165,6 +181,10 @@ body,
 .inline-form .text-input {
   flex: 0 0 140px;
 }
+
+/* ================================================
+ * プレイヤー画面 (スマホ最適化)
+ * ================================================ */
 
 /* ----- プレイヤー参加画面 ----- */
 .join-card {
@@ -185,6 +205,9 @@ body,
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* iPhone セーフエリア対応 */
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
 }
 
 .player-header {
@@ -220,7 +243,7 @@ body,
 }
 
 .last-drawn-number {
-  font-size: 4rem;
+  font-size: 4.5rem;
   font-weight: 900;
   color: var(--accent);
   line-height: 1.1;
@@ -248,7 +271,7 @@ body,
 .bingo-card {
   background: white;
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px;
   box-shadow: var(--shadow);
 }
 
@@ -297,10 +320,11 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
+  font-size: clamp(1.2rem, 6vw, 2rem);
   font-weight: 700;
   color: var(--text);
   transition: all 0.2s;
+  user-select: none;
 }
 
 .bingo-cell.marked {
@@ -319,11 +343,16 @@ body,
   justify-content: center;
 }
 
+.player-actions .btn-lg {
+  width: 100%;
+  max-width: 400px;
+}
+
 /* ----- トースト ----- */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 40px;
+  bottom: calc(40px + var(--safe-bottom));
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.95);
   color: white;
@@ -331,6 +360,8 @@ body,
   border-radius: 10px;
   box-shadow: var(--shadow);
   z-index: 50;
+  max-width: calc(100% - 40px);
+  text-align: center;
 }
 
 /* ----- モーダル ----- */
@@ -343,6 +374,7 @@ body,
   justify-content: center;
   z-index: 100;
   animation: fadeIn 0.25s ease;
+  padding: 20px;
 }
 
 @keyframes fadeIn {
@@ -359,7 +391,7 @@ body,
   border-radius: var(--radius);
   padding: 32px;
   max-width: 420px;
-  width: calc(100% - 40px);
+  width: 100%;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
   animation: popIn 0.3s ease;
@@ -412,13 +444,15 @@ body,
   margin-bottom: 16px;
 }
 
-/* ----- ホスト画面 ----- */
+/* ================================================
+ * ホスト画面 (FullHD 最適化)
+ * ================================================ */
 .host-screen {
-  max-width: 1100px;
+  max-width: 1760px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .host-header {
@@ -431,7 +465,7 @@ body,
 }
 
 .host-title {
-  font-size: 2rem;
+  font-size: 2.4rem;
   margin: 0;
   letter-spacing: 3px;
 }
@@ -447,8 +481,8 @@ body,
 }
 
 .host-status {
-  color: #cbd5e1;
-  font-size: 0.95rem;
+  color: #e2e8f0;
+  font-size: 1.05rem;
 }
 
 .setup-card h2 {
@@ -467,7 +501,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 50vh;
+  max-height: 60vh;
   overflow-y: auto;
 }
 
@@ -489,11 +523,12 @@ body,
   justify-content: flex-end;
 }
 
-/* メイン3カラム */
+/* メイン 2 カラム */
 .host-main {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1.5fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 24px;
 }
 
 .host-main .draw-card {
@@ -511,53 +546,48 @@ body,
   grid-row: 2;
 }
 
-@media (max-width: 880px) {
-  .host-main {
-    grid-template-columns: 1fr;
-  }
-  .host-main .draw-card,
-  .host-main .prize-card,
-  .host-main .players-card {
-    grid-column: 1;
-    grid-row: auto;
-  }
-}
-
 .draw-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .draw-display {
   text-align: center;
-  padding: 20px;
+  padding: 24px;
   background: linear-gradient(135deg, #eef2ff, #ede9fe);
   border-radius: var(--radius);
 }
 
 .draw-label {
   color: var(--muted);
+  font-size: 1.1rem;
 }
 
 .draw-number {
-  font-size: 6rem;
+  font-size: clamp(5rem, 14vw, 16rem);
   font-weight: 900;
   color: var(--primary-dark);
   line-height: 1;
-  text-shadow: 0 4px 24px rgba(99, 102, 241, 0.3);
+  text-shadow: 0 6px 32px rgba(99, 102, 241, 0.35);
+  font-variant-numeric: tabular-nums;
 }
 
 .draw-actions {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
+}
+
+.draw-actions .btn-lg {
+  padding: 22px 44px;
+  font-size: 1.5rem;
 }
 
 .drawn-list {
   display: grid;
   grid-template-columns: repeat(15, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 
 .drawn-cell {
@@ -566,10 +596,11 @@ body,
   align-items: center;
   justify-content: center;
   background: #f1f5f9;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .drawn-cell.hit {
@@ -580,14 +611,16 @@ body,
 .drawn-cell.last {
   background: var(--accent);
   color: #78350f;
-  transform: scale(1.1);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+  transform: scale(1.12);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
+  z-index: 1;
 }
 
 /* 景品表示リスト */
 .prize-card h3,
 .players-card h3 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
+  font-size: 1.25rem;
 }
 
 .prize-display-list {
@@ -596,19 +629,19 @@ body,
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 480px;
+  gap: 10px;
+  max-height: 560px;
   overflow-y: auto;
 }
 
 .prize-display-item {
   display: grid;
-  grid-template-columns: 60px 1fr auto;
+  grid-template-columns: 70px 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: 12px;
+  padding: 14px 16px;
   background: #f8fafc;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 2px solid transparent;
   transition: all 0.3s;
 }
@@ -621,10 +654,13 @@ body,
 .prize-display-rank {
   font-weight: 900;
   color: var(--primary-dark);
+  font-size: 1.1rem;
 }
 
 .prize-display-name {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.05rem;
+  word-break: break-word;
 }
 
 .prize-display-winner {
@@ -635,6 +671,7 @@ body,
 .prize-display-item.won .prize-display-winner {
   color: #92400e;
   font-weight: 700;
+  font-size: 1rem;
 }
 
 /* 参加者リスト */
@@ -644,7 +681,7 @@ body,
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-height: 340px;
   overflow-y: auto;
 }
@@ -653,9 +690,9 @@ body,
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: #f8fafc;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .player-item.winner {
@@ -666,6 +703,7 @@ body,
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .player-dot.on {
@@ -687,38 +725,282 @@ body,
   font-size: 0.85rem;
 }
 
-/* 当選モーダル */
+/* 当選モーダル (ホスト側) */
 .winner-modal {
-  max-width: 480px;
+  max-width: 640px;
 }
 
 .winner-rank {
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 900;
   color: var(--accent);
   margin-top: 8px;
 }
 
 .winner-name {
-  font-size: 2.2rem;
+  font-size: 3rem;
   font-weight: 900;
   color: var(--text);
-  margin: 12px 0;
+  margin: 16px 0;
 }
 
 .winner-prize-label {
   color: var(--muted);
-  font-size: 0.9rem;
-  margin-top: 12px;
+  font-size: 1rem;
+  margin-top: 16px;
 }
 
 .winner-prize-name {
-  font-size: 2.4rem;
+  font-size: 3rem;
   font-weight: 900;
   color: var(--primary-dark);
-  margin: 8px 0 20px;
-  padding: 18px;
-  border-radius: 14px;
+  margin: 12px 0 24px;
+  padding: 24px;
+  border-radius: 16px;
   background: linear-gradient(135deg, #eef2ff, #ede9fe);
-  box-shadow: inset 0 0 0 2px var(--primary);
+  box-shadow: inset 0 0 0 3px var(--primary);
+  word-break: break-word;
+}
+
+/* ================================================
+ * レスポンシブ切り替え
+ * ================================================ */
+
+/* --- タブレット以下 (ホストレイアウト縦並び) --- */
+@media (max-width: 1100px) {
+  .host-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .host-main .draw-card,
+  .host-main .prize-card,
+  .host-main .players-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .drawn-list {
+    grid-template-columns: repeat(10, 1fr);
+  }
+}
+
+/* --- フル HD (1920x1080) 専用最適化 --- */
+@media (min-width: 1600px) {
+  .host-screen {
+    max-width: 1820px;
+    padding: 32px 40px;
+  }
+  .host-title {
+    font-size: 3rem;
+  }
+  .host-status {
+    font-size: 1.25rem;
+  }
+  .card {
+    padding: 32px;
+  }
+  .draw-display {
+    padding: 40px;
+  }
+  .draw-number {
+    font-size: 18rem;
+    letter-spacing: -4px;
+  }
+  .draw-label {
+    font-size: 1.5rem;
+  }
+  .draw-actions .btn-lg {
+    padding: 28px 60px;
+    font-size: 1.8rem;
+    min-height: 80px;
+  }
+  .drawn-list {
+    gap: 10px;
+  }
+  .drawn-cell {
+    font-size: 1.5rem;
+    border-radius: 10px;
+  }
+  .prize-card h3,
+  .players-card h3 {
+    font-size: 1.6rem;
+    margin-bottom: 18px;
+  }
+  .prize-display-item {
+    padding: 18px 22px;
+    grid-template-columns: 90px 1fr auto;
+    gap: 16px;
+  }
+  .prize-display-rank {
+    font-size: 1.4rem;
+  }
+  .prize-display-name {
+    font-size: 1.4rem;
+  }
+  .prize-display-winner {
+    font-size: 1.15rem;
+  }
+  .prize-display-list {
+    max-height: 720px;
+  }
+  .player-list {
+    max-height: 420px;
+  }
+  .player-item {
+    padding: 12px 18px;
+  }
+  .player-list-name {
+    font-size: 1.1rem;
+  }
+  .player-list-meta {
+    font-size: 1rem;
+  }
+  /* 当選モーダル FullHD 版 */
+  .winner-modal {
+    max-width: 900px;
+    padding: 60px;
+  }
+  .confetti {
+    font-size: 6rem;
+  }
+  .winner-rank {
+    font-size: 3rem;
+  }
+  .winner-name {
+    font-size: 4.5rem;
+    margin: 24px 0;
+  }
+  .winner-prize-label {
+    font-size: 1.4rem;
+  }
+  .winner-prize-name {
+    font-size: 5rem;
+    padding: 40px;
+    border-radius: 20px;
+  }
+}
+
+/* --- 超高解像度 (4K 等) --- */
+@media (min-width: 2400px) {
+  .host-screen {
+    max-width: 2200px;
+  }
+  .draw-number {
+    font-size: 22rem;
+  }
+}
+
+/* --- スマートフォン (プレイヤー最適化) --- */
+@media (max-width: 600px) {
+  .screen {
+    padding: 14px;
+    padding-left: calc(14px + var(--safe-left));
+    padding-right: calc(14px + var(--safe-right));
+  }
+  .player-screen {
+    gap: 14px;
+    padding-top: calc(14px + var(--safe-top));
+    padding-bottom: calc(14px + var(--safe-bottom));
+  }
+  .player-header {
+    position: sticky;
+    top: var(--safe-top);
+    z-index: 10;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.4));
+    backdrop-filter: blur(8px);
+    padding: 10px 12px;
+    margin: -14px -14px 0;
+    border-radius: 0 0 12px 12px;
+  }
+  .player-name {
+    font-size: 1.15rem;
+  }
+  .last-drawn {
+    padding: 14px;
+  }
+  .last-drawn-number {
+    font-size: 5.5rem;
+  }
+  .bingo-card {
+    padding: 10px;
+  }
+  .bingo-header {
+    gap: 4px;
+  }
+  .bingo-head {
+    font-size: 1.2rem;
+    padding: 4px 0;
+  }
+  .bingo-grid {
+    gap: 4px;
+  }
+  .bingo-cell {
+    border-radius: 8px;
+    font-size: clamp(1rem, 5.5vw, 1.7rem);
+  }
+  .player-actions .btn-lg {
+    width: 100%;
+    max-width: none;
+    padding: 20px;
+    font-size: 1.3rem;
+  }
+  /* ホスト画面はスマホ表示だとかなり詰まるので注意書き代わりに縮小 */
+  .host-title {
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+  }
+  .drawn-list {
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px;
+  }
+  .drawn-cell {
+    font-size: 0.75rem;
+    border-radius: 5px;
+  }
+  .draw-actions {
+    flex-wrap: wrap;
+  }
+  .draw-actions .btn-lg {
+    width: 100%;
+  }
+  .prize-display-item {
+    grid-template-columns: 50px 1fr;
+    grid-template-rows: auto auto;
+  }
+  .prize-display-winner {
+    grid-column: 1 / -1;
+  }
+  .modal {
+    padding: 24px;
+  }
+  .winner-name {
+    font-size: 2rem;
+  }
+  .winner-prize-name {
+    font-size: 2rem;
+    padding: 16px;
+  }
+}
+
+/* --- 極小画面 (iPhone SE 等 375 以下) --- */
+@media (max-width: 380px) {
+  .last-drawn-number {
+    font-size: 4.5rem;
+  }
+  .bingo-head {
+    font-size: 1rem;
+  }
+}
+
+/* --- 横向きスマホ --- */
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+  .player-screen {
+    max-width: 100%;
+  }
+  .last-drawn-number {
+    font-size: 3rem;
+  }
+  .bingo-card {
+    max-width: 70vh;
+    margin: 0 auto;
+  }
 }

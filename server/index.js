@@ -1,11 +1,18 @@
 import express from "express";
 import http from "http";
+import crypto from "crypto";
 import cors from "cors";
 import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 
 const PORT = process.env.PORT || 3001;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
+// ホスト操作を行うためのパスワード (空の場合は無効)
+const HOST_PASSWORD = process.env.HOST_PASSWORD || "";
+// 1 つの socket がビンゴ申告できる最短間隔 (ms)
+const CLAIM_COOLDOWN_MS = 500;
+// 1 つの socket が番号を引ける最短間隔 (ms)
+const DRAW_COOLDOWN_MS = 300;
 
 const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN }));
@@ -161,6 +168,13 @@ function broadcastState() {
   });
 }
 
+/**
+ * このソケットがホストとして認証済みかを確認する
+ */
+function isHost(socket) {
+  return socket.data && socket.data.isHost === true && socket.rooms.has("host");
+}
+
 // ==============================
 // Socket.IO 通信
 // ==============================
@@ -168,8 +182,15 @@ io.on("connection", (socket) => {
   console.log(`[connect] ${socket.id}`);
 
   // ------ ホスト ------
-  socket.on("host:join", () => {
+  socket.on("host:join", ({ password } = {}) => {
+    // HOST_PASSWORD が設定されていれば一致チェック
+    if (HOST_PASSWORD && password !== HOST_PASSWORD) {
+      socket.emit("host:authFailed", "ホスト用パスワードが正しくありません。");
+      return;
+    }
+    socket.data.isHost = true;
     socket.join("host");
+    socket.emit("host:authOk");
     socket.emit("host:update", {
       drawnNumbers: state.drawnNumbers,
       lastDrawn: state.lastDrawn,
@@ -184,6 +205,7 @@ io.on("connection", (socket) => {
 
   // 景品数を設定 (その後 prizeInput フェーズに移行)
   socket.on("host:setPrizeCount", ({ count }) => {
+    if (!isHost(socket)) return;
     const n = Number(count);
     if (!Number.isInteger(n) || n < 1 || n > 50) {
       socket.emit("error:message", "景品数は 1〜50 の範囲で指定してください。");
@@ -200,6 +222,7 @@ io.on("connection", (socket) => {
 
   // 景品名を一括で設定 (設定後 playing フェーズに移行)
   socket.on("host:setPrizeNames", ({ names }) => {
+    if (!isHost(socket)) return;
     if (!Array.isArray(names)) {
       socket.emit("error:message", "景品名のデータ形式が正しくありません。");
       return;
@@ -220,6 +243,13 @@ io.on("connection", (socket) => {
 
   // 番号を引く
   socket.on("host:draw", () => {
+    if (!isHost(socket)) return;
+    // 連打の抑止
+    const now = Date.now();
+    if (socket.data.lastDrawAt && now - socket.data.lastDrawAt < DRAW_COOLDOWN_MS) {
+      return;
+    }
+    socket.data.lastDrawAt = now;
     if (state.phase !== "playing") {
       socket.emit("error:message", "まだゲームが開始されていません。");
       return;
@@ -243,6 +273,7 @@ io.on("connection", (socket) => {
 
   // ゲームリセット
   socket.on("host:reset", () => {
+    if (!isHost(socket)) return;
     const keepPlayers = state.players;
     // プレイヤーにはカードを新しく発行する
     for (const [, player] of keepPlayers) {
@@ -262,42 +293,59 @@ io.on("connection", (socket) => {
 
   // 景品数を変更するために setup に戻す
   socket.on("host:backToSetup", () => {
+    if (!isHost(socket)) return;
     state.phase = "setup";
     broadcastState();
   });
 
   // ------ プレイヤー ------
-  socket.on("player:join", ({ playerId, name }) => {
-    const id = playerId && typeof playerId === "string" ? playerId : uuidv4();
-    const playerName = typeof name === "string" && name.trim() ? name.trim().slice(0, 20) : "名無し";
+  socket.on("player:join", ({ playerId, token, name }) => {
+    const playerName =
+      typeof name === "string" && name.trim() ? name.trim().slice(0, 20) : "名無し";
 
-    let player = state.players.get(id);
-    if (player) {
-      // 再接続
-      player.socketId = socket.id;
-      player.connected = true;
-      player.name = playerName;
-    } else {
-      player = {
-        id,
-        name: playerName,
-        socketId: socket.id,
-        card: generateBingoCard(),
-        hasClaimed: false,
-        connected: true,
-      };
-      state.players.set(id, player);
+    // 既存プレイヤーとして再接続を試みる
+    if (playerId && typeof playerId === "string" && state.players.has(playerId)) {
+      const existing = state.players.get(playerId);
+      // トークンが一致しなければなりすましとみなして拒否
+      if (!token || token !== existing.token) {
+        socket.emit("error:message", "このプレイヤーIDは既に使用されています。");
+        return;
+      }
+      existing.socketId = socket.id;
+      existing.connected = true;
+      existing.name = playerName;
+      socket.data.playerId = existing.id;
+      socket.emit("player:joined", {
+        playerId: existing.id,
+        token: existing.token,
+        name: existing.name,
+        card: existing.card,
+      });
+      broadcastState();
+      return;
     }
 
-    socket.join(`player:${id}`);
+    // 新規プレイヤー
+    const id = uuidv4();
+    const newToken = crypto.randomBytes(24).toString("hex");
+    const player = {
+      id,
+      token: newToken,
+      name: playerName,
+      socketId: socket.id,
+      card: generateBingoCard(),
+      hasClaimed: false,
+      connected: true,
+      lastClaimAt: 0,
+    };
+    state.players.set(id, player);
     socket.data.playerId = id;
-
     socket.emit("player:joined", {
       playerId: id,
+      token: newToken,
       name: player.name,
       card: player.card,
     });
-
     broadcastState();
   });
 
@@ -307,6 +355,17 @@ io.on("connection", (socket) => {
     if (!id) return;
     const player = state.players.get(id);
     if (!player) return;
+    // socket は本人のものか?
+    if (player.socketId !== socket.id) return;
+    // 連打防止
+    const now = Date.now();
+    if (player.lastClaimAt && now - player.lastClaimAt < CLAIM_COOLDOWN_MS) return;
+    player.lastClaimAt = now;
+    // playing フェーズ以外では拒否
+    if (state.phase !== "playing") {
+      socket.emit("error:message", "まだゲームが開始されていません。");
+      return;
+    }
 
     const lines = countBingoLines(player.card, state.drawnNumbers);
     if (lines < 1) {

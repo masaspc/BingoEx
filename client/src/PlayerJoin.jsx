@@ -16,9 +16,7 @@ export default function PlayerJoin() {
     const trimmed = name.trim();
     if (!trimmed) return;
     localStorage.setItem("bingoex:name", trimmed);
-    if (!localStorage.getItem("bingoex:playerId")) {
-      localStorage.setItem("bingoex:playerId", crypto.randomUUID());
-    }
+    // playerId と token はサーバー発行を受け取ってから保存する
     navigate("/game");
   };
 

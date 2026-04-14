@@ -17,11 +17,33 @@ export default function HostDashboard() {
   const [prizeNameInputs, setPrizeNameInputs] = useState([]);
   const [message, setMessage] = useState(null);
   const [winnerPopup, setWinnerPopup] = useState(null); // 新しい当選者の表示用
+  const [authed, setAuthed] = useState(false);
+  const [needPassword, setNeedPassword] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
 
   useEffect(() => {
-    const joinHost = () => socket.emit("host:join");
+    const joinHost = () => {
+      // まずパスワードなしで試す
+      const saved = sessionStorage.getItem("bingoex:hostPassword") || "";
+      socket.emit("host:join", { password: saved });
+    };
     if (socket.connected) joinHost();
     socket.on("connect", joinHost);
+
+    socket.on("host:authOk", () => {
+      setAuthed(true);
+      setNeedPassword(false);
+    });
+
+    socket.on("host:authFailed", (msg) => {
+      setAuthed(false);
+      setNeedPassword(true);
+      sessionStorage.removeItem("bingoex:hostPassword");
+      if (msg) {
+        setMessage(msg);
+        setTimeout(() => setMessage(null), 3500);
+      }
+    });
 
     socket.on("host:update", (s) => {
       setState(s);
@@ -53,11 +75,19 @@ export default function HostDashboard() {
 
     return () => {
       socket.off("connect", joinHost);
+      socket.off("host:authOk");
+      socket.off("host:authFailed");
       socket.off("host:update");
       socket.off("host:newWinner");
       socket.off("error:message");
     };
   }, []);
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    sessionStorage.setItem("bingoex:hostPassword", passwordInput);
+    socket.emit("host:join", { password: passwordInput });
+  };
 
   const handleSubmitPrizeCount = (e) => {
     e.preventDefault();
@@ -93,6 +123,38 @@ export default function HostDashboard() {
     if (!window.confirm("景品数の設定画面に戻りますか？")) return;
     socket.emit("host:backToSetup");
   };
+
+  if (needPassword && !authed) {
+    return (
+      <div className="screen center">
+        <div className="card join-card">
+          <h1 className="title">
+            <span className="title-b">B</span>
+            <span className="title-i">I</span>
+            <span className="title-n">N</span>
+            <span className="title-g">G</span>
+            <span className="title-o">O</span>
+            <span className="title-ex">Ex</span>
+          </h1>
+          <p className="subtitle">ホスト認証</p>
+          <form onSubmit={handlePasswordSubmit} className="join-form">
+            <label className="label">ホスト用パスワード</label>
+            <input
+              className="text-input"
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              autoFocus
+            />
+            <button type="submit" className="btn btn-primary" disabled={!passwordInput}>
+              ログイン
+            </button>
+          </form>
+          {message && <div className="toast">{message}</div>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="screen host-screen">

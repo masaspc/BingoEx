@@ -18,6 +18,7 @@ export default function PlayerGame() {
 
   useEffect(() => {
     const playerId = localStorage.getItem("bingoex:playerId");
+    const token = localStorage.getItem("bingoex:token");
     const name = localStorage.getItem("bingoex:name");
     if (!name) {
       navigate("/");
@@ -26,13 +27,15 @@ export default function PlayerGame() {
     setMyName(name);
 
     const joinNow = () => {
-      socket.emit("player:join", { playerId, name });
+      socket.emit("player:join", { playerId, token, name });
     };
 
     if (socket.connected) joinNow();
     socket.on("connect", joinNow);
 
-    socket.on("player:joined", ({ card }) => {
+    socket.on("player:joined", ({ playerId: newId, token: newToken, card }) => {
+      if (newId) localStorage.setItem("bingoex:playerId", newId);
+      if (newToken) localStorage.setItem("bingoex:token", newToken);
       setCard(card);
     });
 
@@ -93,6 +96,8 @@ export default function PlayerGame() {
 
   const handleLeave = () => {
     localStorage.removeItem("bingoex:name");
+    localStorage.removeItem("bingoex:playerId");
+    localStorage.removeItem("bingoex:token");
     navigate("/");
   };
 
