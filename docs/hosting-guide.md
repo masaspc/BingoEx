@@ -260,16 +260,6 @@ nginx -t
 systemctl restart nginx
 ```
 
-### 「同一ネットワークからの参加上限に達しています」と表示される
-
-同じIPから3名以上が参加しようとした場合に表示されます。
-会場のWiFiなど全員が同一IPになる環境では、上限を引き上げてください:
-
-```bash
-MAX_CONNECTIONS_PER_IP=60 pm2 restart bingoex --update-env
-pm2 save
-```
-
 ### アプリを更新したい
 
 ```bash
@@ -285,15 +275,13 @@ bash /opt/bingoex/deploy/update.sh
 |--------|-----------|------|
 | `PORT` | `3001` | サーバーのポート番号 |
 | `HOST_PASSWORD` | (空=無効) | ホスト画面のパスワード。**本番では必ず設定** |
-| `MAX_PLAYERS` | `100` | 最大参加者数 |
-| `MAX_CONNECTIONS_PER_IP` | `3` | 同一IPからの新規参加上限 |
 | `NODE_ENV` | `development` | `production` で本番モード |
 | `CLIENT_ORIGIN` | `*` | 開発時のCORS許可オリジン (本番では不使用) |
 
 ### 環境変数の変更方法 (PM2)
 
 ```bash
-# 例: 同一IP制限を緩和して再起動
-MAX_CONNECTIONS_PER_IP=60 HOST_PASSWORD="MyBingo2026!" pm2 restart bingoex --update-env
+# 例: パスワードを変更して再起動
+HOST_PASSWORD="NewPassword!" pm2 restart bingoex --update-env
 pm2 save
 ```

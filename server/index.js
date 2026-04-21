@@ -14,8 +14,6 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
 const HOST_PASSWORD = process.env.HOST_PASSWORD || "";
 const CLAIM_COOLDOWN_MS = 500;
 const DRAW_COOLDOWN_MS = 300;
-const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 100;
-const MAX_CONNECTIONS_PER_IP = Number(process.env.MAX_CONNECTIONS_PER_IP) || 3;
 
 const app = express();
 if (NODE_ENV !== "production") {
@@ -181,29 +179,10 @@ function isHost(socket) {
 }
 
 // ==============================
-// IP ごとの接続数追跡
-// ==============================
-function getSocketIP(socket) {
-  return (
-    socket.handshake.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    socket.handshake.address ||
-    "unknown"
-  );
-}
-
-function countPlayerConnectionsByIP(ip) {
-  let count = 0;
-  for (const p of state.players.values()) {
-    if (p.connected && p.ip === ip) count++;
-  }
-  return count;
-}
-
-// ==============================
 // Socket.IO 通信
 // ==============================
 io.on("connection", (socket) => {
-  console.log(`[connect] ${socket.id} ip=${getSocketIP(socket)}`);
+  console.log(`[connect] ${socket.id}`);
 
   // ------ ホスト ------
   socket.on("host:join", ({ password } = {}) => {
@@ -339,7 +318,6 @@ io.on("connection", (socket) => {
   socket.on("player:join", ({ playerId, token, name }) => {
     const playerName =
       typeof name === "string" && name.trim() ? name.trim().slice(0, 20) : "名無し";
-    const ip = getSocketIP(socket);
 
     // 既存プレイヤーとして再接続を試みる
     if (playerId && typeof playerId === "string" && state.players.has(playerId)) {
@@ -350,7 +328,6 @@ io.on("connection", (socket) => {
       }
       existing.socketId = socket.id;
       existing.connected = true;
-      existing.ip = ip;
       // ゲーム中 (playing/finished) は名前変更不可
       if (state.phase === "setup" || state.phase === "prizeInput") {
         existing.name = playerName;
@@ -366,22 +343,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // 新規参加者数の上限チェック
-    if (state.players.size >= MAX_PLAYERS) {
-      socket.emit("error:message", "参加者数が上限に達しています。");
-      return;
-    }
-
-    // 同一 IP からの新規接続数制限
-    const ipCount = countPlayerConnectionsByIP(ip);
-    if (ipCount >= MAX_CONNECTIONS_PER_IP) {
-      socket.emit(
-        "error:message",
-        `同一ネットワークからの参加上限 (${MAX_CONNECTIONS_PER_IP}名) に達しています。`,
-      );
-      return;
-    }
-
     const id = uuidv4();
     const newToken = crypto.randomBytes(24).toString("hex");
     const player = {
@@ -393,7 +354,6 @@ io.on("connection", (socket) => {
       hasClaimed: false,
       connected: true,
       lastClaimAt: 0,
-      ip,
     };
     state.players.set(id, player);
     socket.data.playerId = id;
