@@ -1,0 +1,13 @@
+{
+  "name": "bingoex",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "cd client && npm ci && cd ../server && npm ci",
+    "build": "cd client && npm run build",
+    "start": "NODE_ENV=production node server/index.js",
+    "dev:server": "cd server && node --watch index.js",
+    "dev:client": "cd client && npm run dev"
+  }
+}

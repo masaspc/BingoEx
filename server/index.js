@@ -2,28 +2,31 @@ import express from "express";
 import http from "http";
 import crypto from "crypto";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || "development";
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
-// ホスト操作を行うためのパスワード (空の場合は無効)
 const HOST_PASSWORD = process.env.HOST_PASSWORD || "";
-// 1 つの socket がビンゴ申告できる最短間隔 (ms)
 const CLAIM_COOLDOWN_MS = 500;
-// 1 つの socket が番号を引ける最短間隔 (ms)
 const DRAW_COOLDOWN_MS = 300;
 
 const app = express();
-app.use(cors({ origin: CLIENT_ORIGIN }));
+if (NODE_ENV !== "production") {
+  app.use(cors({ origin: CLIENT_ORIGIN }));
+}
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: CLIENT_ORIGIN,
-    methods: ["GET", "POST"],
-  },
+  cors:
+    NODE_ENV !== "production"
+      ? { origin: CLIENT_ORIGIN, methods: ["GET", "POST"] }
+      : undefined,
 });
 
 // ==============================
@@ -435,10 +438,22 @@ io.on("connection", (socket) => {
   });
 });
 
-app.get("/", (_req, res) => {
+// 本番: client/dist の静的ファイルを配信 + SPA フォールバック
+const DIST_DIR = path.resolve(__dirname, "..", "client", "dist");
+if (NODE_ENV === "production") {
+  app.use(express.static(DIST_DIR));
+}
+
+app.get("/api/health", (_req, res) => {
   res.json({ ok: true, name: "BingoEx server", phase: state.phase });
 });
 
+if (NODE_ENV === "production") {
+  app.get("/{*splat}", (_req, res) => {
+    res.sendFile(path.join(DIST_DIR, "index.html"));
+  });
+}
+
 server.listen(PORT, () => {
-  console.log(`BingoEx server listening on http://localhost:${PORT}`);
+  console.log(`BingoEx server listening on http://localhost:${PORT} [${NODE_ENV}]`);
 });
