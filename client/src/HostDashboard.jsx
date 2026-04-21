@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import socket from "./socket.js";
 
 export default function HostDashboard() {
@@ -17,6 +17,7 @@ export default function HostDashboard() {
   const [prizeNameInputs, setPrizeNameInputs] = useState([]);
   const [message, setMessage] = useState(null);
   const [winnerPopup, setWinnerPopup] = useState(null); // 新しい当選者の表示用
+  const [showResults, setShowResults] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [needPassword, setNeedPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -71,6 +72,10 @@ export default function HostDashboard() {
       setTimeout(() => setWinnerPopup(null), 6000);
     });
 
+    socket.on("host:resultsData", (data) => {
+      downloadCSV(data);
+    });
+
     socket.on("error:message", (msg) => {
       setMessage(msg);
       setTimeout(() => setMessage(null), 3500);
@@ -83,6 +88,7 @@ export default function HostDashboard() {
       socket.off("host:authFailed");
       socket.off("host:update");
       socket.off("host:newWinner");
+      socket.off("host:resultsData");
       socket.off("error:message");
     };
   }, []);
@@ -131,6 +137,39 @@ export default function HostDashboard() {
   const handleBackToSetup = () => {
     if (!window.confirm("景品数の設定画面に戻りますか？")) return;
     socket.emit("host:backToSetup");
+  };
+
+  const handleExportCSV = () => {
+    socket.emit("host:exportResults");
+  };
+
+  const downloadCSV = useCallback((data) => {
+    const BOM = "﻿";
+    const header = "順位,景品名,当選者名,当選時刻";
+    const rows = data.results.map(
+      (r) =>
+        `${r.rank},"${(r.prizeName || "").replace(/"/g, '""')}","${(r.winnerName || "").replace(/"/g, '""')}",${r.timestamp}`,
+    );
+    const footer = `\n# 出力日時: ${data.exportedAt}  参加者数: ${data.totalPlayers}  抽選数: ${data.drawnCount}`;
+    const csv = BOM + [header, ...rows].join("\n") + footer;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bingoex-results-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleCopyResults = () => {
+    const lines = state.winners.map(
+      (w) => `${w.prizeIndex + 1}等: ${w.prizeName} → ${w.name}`,
+    );
+    const text = lines.length > 0 ? lines.join("\n") : "当選者なし";
+    navigator.clipboard.writeText(text).then(() => {
+      setMessage("クリップボードにコピーしました");
+      setTimeout(() => setMessage(null), 2000);
+    });
   };
 
   if (needPassword && !authed) {
@@ -275,21 +314,67 @@ export default function HostDashboard() {
           </section>
 
           <section className="card prize-card">
-            <h3>景品 / 当選者</h3>
-            <ul className="prize-display-list">
-              {state.prizeNames.map((name, i) => {
-                const winner = state.winners.find((w) => w.prizeIndex === i);
-                return (
-                  <li key={i} className={`prize-display-item ${winner ? "won" : ""}`}>
-                    <div className="prize-display-rank">{i + 1} 等</div>
-                    <div className="prize-display-name">{name || `景品 ${i + 1}`}</div>
-                    <div className="prize-display-winner">
-                      {winner ? `→ ${winner.name} さん` : "（未当選）"}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="prize-card-header">
+              <h3>景品 / 当選者</h3>
+              {state.winners.length > 0 && (
+                <div className="prize-card-actions">
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setShowResults((v) => !v)}
+                  >
+                    {showResults ? "カード表示" : "結果一覧"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {!showResults ? (
+              <ul className="prize-display-list">
+                {state.prizeNames.map((name, i) => {
+                  const winner = state.winners.find((w) => w.prizeIndex === i);
+                  return (
+                    <li key={i} className={`prize-display-item ${winner ? "won" : ""}`}>
+                      <div className="prize-display-rank">{i + 1} 等</div>
+                      <div className="prize-display-name">{name || `景品 ${i + 1}`}</div>
+                      <div className="prize-display-winner">
+                        {winner ? `→ ${winner.name} さん` : "（未当選）"}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="results-panel">
+                <table className="results-table">
+                  <thead>
+                    <tr>
+                      <th>順位</th>
+                      <th>景品名</th>
+                      <th>当選者</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.prizeNames.map((name, i) => {
+                      const winner = state.winners.find((w) => w.prizeIndex === i);
+                      return (
+                        <tr key={i} className={winner ? "row-won" : ""}>
+                          <td>{i + 1} 等</td>
+                          <td>{name || `景品 ${i + 1}`}</td>
+                          <td>{winner ? winner.name : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="results-actions">
+                  <button className="btn btn-primary" onClick={handleExportCSV}>
+                    CSV ダウンロード
+                  </button>
+                  <button className="btn btn-ghost" onClick={handleCopyResults}>
+                    コピー
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="card players-card">
@@ -309,6 +394,47 @@ export default function HostDashboard() {
             </ul>
           </section>
         </div>
+      )}
+
+      {state.phase === "finished" && (
+        <section className="card finished-card">
+          <div className="finished-banner">
+            <div className="finished-icon">🏆</div>
+            <h2>ゲーム終了 — 全景品が確定しました</h2>
+          </div>
+          <table className="results-table results-table-final">
+            <thead>
+              <tr>
+                <th>順位</th>
+                <th>景品名</th>
+                <th>当選者</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.prizeNames.map((name, i) => {
+                const winner = state.winners.find((w) => w.prizeIndex === i);
+                return (
+                  <tr key={i} className={winner ? "row-won" : ""}>
+                    <td>{i + 1} 等</td>
+                    <td>{name || `景品 ${i + 1}`}</td>
+                    <td>{winner ? winner.name : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="finished-actions">
+            <button className="btn btn-primary btn-lg" onClick={handleExportCSV}>
+              CSV ダウンロード
+            </button>
+            <button className="btn btn-ghost btn-lg" onClick={handleCopyResults}>
+              テキストをコピー
+            </button>
+            <button className="btn btn-ghost" onClick={handleReset}>
+              リセット
+            </button>
+          </div>
+        </section>
       )}
 
       {message && <div className="toast">{message}</div>}
