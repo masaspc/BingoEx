@@ -60,6 +60,14 @@ export default function PlayerGame() {
       setTimeout(() => setMessage(null), 3500);
     });
 
+    const handleForceReset = () => {
+      localStorage.removeItem("bingoex:playerId");
+      localStorage.removeItem("bingoex:token");
+      localStorage.removeItem("bingoex:name");
+      navigate("/");
+    };
+    socket.on("player:forceReset", handleForceReset);
+
     return () => {
       socket.off("connect", joinNow);
       socket.off("reconnect", joinNow);
@@ -68,6 +76,7 @@ export default function PlayerGame() {
       socket.off("state:update");
       socket.off("player:won");
       socket.off("error:message");
+      socket.off("player:forceReset", handleForceReset);
     };
   }, [navigate]);
 

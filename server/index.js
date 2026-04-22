@@ -287,23 +287,14 @@ io.on("connection", (socket) => {
     broadcastState();
   });
 
-  // ゲームリセット
+  // ゲームリセット — 全プレイヤーを退出させ名前入力からやり直し
   socket.on("host:reset", () => {
     if (!isHost(socket)) return;
-    const keepPlayers = state.players;
-    // プレイヤーにはカードを新しく発行する
-    for (const [, player] of keepPlayers) {
-      player.card = generateBingoCard();
-      player.hasClaimed = false;
-      // プレイヤーに新しいカードを通知
-      io.to(player.socketId).emit("player:card", { card: player.card });
+    // 全プレイヤーに強制退出を通知
+    for (const [, player] of state.players) {
+      io.to(player.socketId).emit("player:forceReset");
     }
-    const prevPrizeCount = state.prizeCount;
-    state = {
-      ...initialState(),
-      players: keepPlayers,
-      prizeCount: prevPrizeCount,
-    };
+    state = initialState();
     broadcastState();
   });
 
