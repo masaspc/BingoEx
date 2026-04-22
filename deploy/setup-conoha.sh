@@ -75,7 +75,7 @@ HOST_PASSWORD="${HOST_PASSWORD}" PORT="${PORT}" pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup systemd -u root --hp /root 2>/dev/null || true
 
-# --- 6. Nginx ---
+# --- 6. Nginx (HTTP のみで起動 → certbot が SSL を追加) ---
 echo "[6/7] Nginx 設定..."
 sed "s/YOUR_DOMAIN/${DOMAIN}/g" "${APP_DIR}/deploy/nginx-bingoex.conf" \
   > /etc/nginx/sites-available/bingoex
@@ -83,9 +83,9 @@ ln -sf /etc/nginx/sites-available/bingoex /etc/nginx/sites-enabled/bingoex
 rm -f /etc/nginx/sites-enabled/default
 
 nginx -t
-systemctl reload nginx
+systemctl restart nginx
 
-# --- 7. Let's Encrypt ---
+# --- 7. Let's Encrypt (certbot が Nginx 設定に SSL を自動追加) ---
 echo "[7/7] SSL 証明書取得..."
 certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos \
   --register-unsafely-without-email --redirect || {
