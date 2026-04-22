@@ -13,7 +13,7 @@ git fetch origin "${BRANCH}"
 git reset --hard "origin/${BRANCH}"
 
 echo "依存関係更新..."
-cd "${APP_DIR}/client" && npm ci --omit=dev
+cd "${APP_DIR}/client" && npm ci
 cd "${APP_DIR}/server" && npm ci --omit=dev
 
 echo "クライアントビルド..."

@@ -61,7 +61,7 @@ else
 fi
 
 echo "  依存関係インストール..."
-cd "${APP_DIR}/client" && npm ci --omit=dev
+cd "${APP_DIR}/client" && npm ci
 cd "${APP_DIR}/server" && npm ci --omit=dev
 
 echo "  クライアントビルド..."
