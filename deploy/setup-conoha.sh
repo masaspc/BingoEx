@@ -85,19 +85,20 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl restart nginx
 
-# --- 7. Let's Encrypt (certbot が Nginx 設定に SSL を自動追加) ---
-echo "[7/7] SSL 証明書取得..."
+# --- 7. ファイアウォール (certbot より先に開放) ---
+echo "[7/8] ファイアウォール設定..."
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
+
+# --- 8. Let's Encrypt (certbot が Nginx 設定に SSL を自動追加) ---
+echo "[8/8] SSL 証明書取得..."
 certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos \
   --register-unsafely-without-email --redirect || {
   echo "⚠️  certbot 失敗 — DNS が VPS に向いているか確認してください"
   echo "   手動で実行: certbot --nginx -d ${DOMAIN}"
 }
-
-# --- ファイアウォール ---
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw --force enable
 
 echo ""
 echo "================================================"
