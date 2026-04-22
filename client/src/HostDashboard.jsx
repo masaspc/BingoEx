@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import socket from "./socket.js";
 
 export default function HostDashboard() {
@@ -16,19 +16,21 @@ export default function HostDashboard() {
   const [prizeCountInput, setPrizeCountInput] = useState("5");
   const [prizeNameInputs, setPrizeNameInputs] = useState([]);
   const [message, setMessage] = useState(null);
-  const [winnerPopup, setWinnerPopup] = useState(null); // 新しい当選者の表示用
+  const [winnerPopup, setWinnerPopup] = useState(null);
   const [showResults, setShowResults] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [needPassword, setNeedPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
 
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawDisplay, setDrawDisplay] = useState(null);
+  const drawIntervalRef = useRef(null);
+
   useEffect(() => {
     const joinHost = () => {
       const saved = sessionStorage.getItem("bingoex:hostPassword") || "";
-      console.log("[joinHost] emitting host:join");
       socket.emit("host:join", { password: saved });
     };
-    // 接続中でも必ず一度 emit (socket.io がバッファしてくれる)
     joinHost();
     socket.on("connect", joinHost);
     socket.on("reconnect", joinHost);
@@ -49,14 +51,11 @@ export default function HostDashboard() {
     });
 
     socket.on("host:update", (s) => {
-      console.log("[host:update]", s.phase, "prizeCount=", s.prizeCount);
       setState(s);
-      // prizeInput フェーズのときだけ景品名入力欄を景品数に合わせる
       setPrizeNameInputs((current) => {
         if (s.phase !== "prizeInput") return current;
         const next = current.slice(0, s.prizeCount);
         while (next.length < s.prizeCount) next.push("");
-        // サーバー側に保存されている景品名があれば、まだ空欄のインデックスを埋める
         if (Array.isArray(s.prizeNames)) {
           for (let i = 0; i < s.prizeCount; i++) {
             if (!next[i] && s.prizeNames[i]) next[i] = s.prizeNames[i];
@@ -93,6 +92,12 @@ export default function HostDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (drawIntervalRef.current) clearInterval(drawIntervalRef.current);
+    };
+  }, []);
+
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     sessionStorage.setItem("bingoex:hostPassword", passwordInput);
@@ -107,7 +112,6 @@ export default function HostDashboard() {
       setTimeout(() => setMessage(null), 3500);
       return;
     }
-    // 入力欄を景品数に合わせる
     const next = prizeNameInputs.slice(0, n);
     while (next.length < n) next.push("");
     setPrizeNameInputs(next);
@@ -116,17 +120,32 @@ export default function HostDashboard() {
 
   const handleSubmitPrizeNames = (e) => {
     e.preventDefault();
-    // 長さを state.prizeCount に強制的に合わせる (UI 同期の race 対策)
     const target = state.prizeCount || prizeNameInputs.length || 0;
     const padded = prizeNameInputs.slice(0, target);
     while (padded.length < target) padded.push("");
     const cleaned = padded.map((v, i) => (v && v.trim() ? v.trim() : `景品 ${i + 1}`));
-    console.log("[submit prize names]", cleaned);
     socket.emit("host:setPrizeNames", { names: cleaned });
   };
 
   const handleDraw = () => {
-    socket.emit("host:draw");
+    if (isDrawing) return;
+    setIsDrawing(true);
+
+    let count = 0;
+    const totalTicks = 30;
+    drawIntervalRef.current = setInterval(() => {
+      setDrawDisplay(Math.floor(Math.random() * 75) + 1);
+      count++;
+      if (count >= totalTicks) {
+        clearInterval(drawIntervalRef.current);
+        drawIntervalRef.current = null;
+        socket.emit("host:draw");
+        setTimeout(() => {
+          setIsDrawing(false);
+          setDrawDisplay(null);
+        }, 200);
+      }
+    }, 60);
   };
 
   const handleReset = () => {
@@ -171,6 +190,11 @@ export default function HostDashboard() {
       setTimeout(() => setMessage(null), 2000);
     });
   };
+
+  const displayedNumber = isDrawing ? drawDisplay : state.lastDrawn;
+
+  // 景品リストを逆順 (下位等 → 1等) で表示
+  const prizeIndices = Array.from({ length: state.prizeCount }, (_, i) => i).reverse();
 
   if (needPassword && !authed) {
     return (
@@ -246,7 +270,7 @@ export default function HostDashboard() {
         <section className="card setup-card">
           <h2>ステップ 2 / 景品名の入力</h2>
           <p className="muted">
-            上位から順番に景品名を入力してください。空欄の場合は「景品 N」と表示されます。
+            1等が最上位の景品です。当選は下位（{state.prizeCount}等）から順に確定します。
           </p>
           <form onSubmit={handleSubmitPrizeNames} className="prize-form">
             <div className="prize-list">
@@ -281,19 +305,23 @@ export default function HostDashboard() {
       )}
 
       {(state.phase === "playing" || state.phase === "finished") && (
-        <div className="host-main">
+        <div className="host-main-wide">
           <section className="card draw-card">
-            <div className="draw-display">
-              <div className="draw-label">最新の番号</div>
-              <div className="draw-number">{state.lastDrawn ?? "－"}</div>
+            <div className={`draw-display ${isDrawing ? "drawing" : ""}`}>
+              <div className="draw-label">
+                {isDrawing ? "抽選中..." : "最新の番号"}
+              </div>
+              <div className={`draw-number ${isDrawing ? "draw-spinning" : ""}`}>
+                {displayedNumber ?? "－"}
+              </div>
             </div>
             <div className="draw-actions">
               <button
                 className="btn btn-primary btn-lg"
                 onClick={handleDraw}
-                disabled={state.phase === "finished"}
+                disabled={state.phase === "finished" || isDrawing}
               >
-                番号を引く
+                {isDrawing ? "抽選中..." : "抽選！"}
               </button>
               <button className="btn btn-ghost" onClick={handleReset}>
                 リセット
@@ -313,7 +341,7 @@ export default function HostDashboard() {
             </div>
           </section>
 
-          <section className="card prize-card">
+          <section className="card prize-card prize-card-wide">
             <div className="prize-card-header">
               <h3>景品 / 当選者</h3>
               {state.winners.length > 0 && (
@@ -329,14 +357,22 @@ export default function HostDashboard() {
             </div>
             {!showResults ? (
               <ul className="prize-display-list">
-                {state.prizeNames.map((name, i) => {
+                {prizeIndices.map((i) => {
+                  const name = state.prizeNames[i];
                   const winner = state.winners.find((w) => w.prizeIndex === i);
+                  const nextPrizeIndex = state.prizeCount - 1 - state.winners.length;
+                  const isNext = i === nextPrizeIndex && state.phase === "playing";
                   return (
-                    <li key={i} className={`prize-display-item ${winner ? "won" : ""}`}>
+                    <li
+                      key={i}
+                      className={`prize-display-item ${winner ? "won" : ""} ${isNext ? "next-prize" : ""}`}
+                    >
                       <div className="prize-display-rank">{i + 1} 等</div>
-                      <div className="prize-display-name">{name || `景品 ${i + 1}`}</div>
+                      <div className="prize-display-name">
+                        {winner ? name || `景品 ${i + 1}` : "？？？"}
+                      </div>
                       <div className="prize-display-winner">
-                        {winner ? `→ ${winner.name} さん` : "（未当選）"}
+                        {winner ? `→ ${winner.name} さん` : isNext ? "次の当選景品" : ""}
                       </div>
                     </li>
                   );
@@ -358,7 +394,7 @@ export default function HostDashboard() {
                       return (
                         <tr key={i} className={winner ? "row-won" : ""}>
                           <td>{i + 1} 等</td>
-                          <td>{name || `景品 ${i + 1}`}</td>
+                          <td>{winner ? name || `景品 ${i + 1}` : "？？？"}</td>
                           <td>{winner ? winner.name : "—"}</td>
                         </tr>
                       );
@@ -375,23 +411,6 @@ export default function HostDashboard() {
                 </div>
               </div>
             )}
-          </section>
-
-          <section className="card players-card">
-            <h3>参加者 ({state.players.length}名)</h3>
-            <ul className="player-list">
-              {state.players.map((p) => (
-                <li key={p.id} className={`player-item ${p.isWinner ? "winner" : ""}`}>
-                  <div className={`player-dot ${p.connected ? "on" : "off"}`} />
-                  <span className="player-list-name">{p.name}</span>
-                  <span className="player-list-meta">
-                    ビンゴ: {p.bingoLines}
-                    {p.isWinner && " 🏆"}
-                  </span>
-                </li>
-              ))}
-              {state.players.length === 0 && <li className="muted">まだ参加者がいません。</li>}
-            </ul>
           </section>
         </div>
       )}

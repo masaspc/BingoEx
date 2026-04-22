@@ -98,13 +98,6 @@ export default function PlayerGame() {
     socket.emit("player:claimBingo");
   };
 
-  const handleLeave = () => {
-    localStorage.removeItem("bingoex:name");
-    localStorage.removeItem("bingoex:playerId");
-    localStorage.removeItem("bingoex:token");
-    navigate("/");
-  };
-
   if (!card) {
     return (
       <div className="screen center">
@@ -122,9 +115,6 @@ export default function PlayerGame() {
           <div className="player-name">{myName}</div>
           <div className="player-sub">ビンゴ数: {bingoLines}</div>
         </div>
-        <button className="btn btn-ghost" onClick={handleLeave}>
-          退出
-        </button>
       </header>
 
       <div className="last-drawn">

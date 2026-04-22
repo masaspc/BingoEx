@@ -523,27 +523,19 @@ body,
   justify-content: flex-end;
 }
 
-/* メイン 2 カラム */
-.host-main {
+/* メイン 2 カラム (抽選 + 景品) */
+.host-main-wide {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: 1.2fr 1fr;
   gap: 24px;
 }
 
-.host-main .draw-card {
+.host-main-wide .draw-card {
   grid-column: 1;
-  grid-row: 1 / span 2;
 }
 
-.host-main .prize-card {
+.host-main-wide .prize-card-wide {
   grid-column: 2;
-  grid-row: 1;
-}
-
-.host-main .players-card {
-  grid-column: 2;
-  grid-row: 2;
 }
 
 .draw-card {
@@ -557,6 +549,22 @@ body,
   padding: 24px;
   background: linear-gradient(135deg, #eef2ff, #ede9fe);
   border-radius: var(--radius);
+  transition: background 0.3s;
+}
+
+.draw-display.drawing {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+}
+
+@keyframes spinNumber {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.draw-number.draw-spinning {
+  animation: spinNumber 0.12s infinite;
+  color: var(--accent);
 }
 
 .draw-label {
@@ -617,8 +625,7 @@ body,
 }
 
 /* 景品表示リスト */
-.prize-card h3,
-.players-card h3 {
+.prize-card h3 {
   margin: 0 0 14px;
   font-size: 1.25rem;
 }
@@ -630,7 +637,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 560px;
+  max-height: 75vh;
   overflow-y: auto;
 }
 
@@ -649,6 +656,17 @@ body,
 .prize-display-item.won {
   background: linear-gradient(135deg, #fef3c7, #fde68a);
   border-color: var(--accent);
+}
+
+.prize-display-item.next-prize {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3); }
+  50% { box-shadow: 0 0 16px 4px rgba(99, 102, 241, 0.4); }
 }
 
 .prize-display-rank {
@@ -877,15 +895,12 @@ body,
 
 /* --- タブレット以下 (ホストレイアウト縦並び) --- */
 @media (max-width: 1100px) {
-  .host-main {
+  .host-main-wide {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
   }
-  .host-main .draw-card,
-  .host-main .prize-card,
-  .host-main .players-card {
+  .host-main-wide .draw-card,
+  .host-main-wide .prize-card-wide {
     grid-column: 1;
-    grid-row: auto;
   }
   .drawn-list {
     grid-template-columns: repeat(10, 1fr);
@@ -929,8 +944,7 @@ body,
     font-size: 1.5rem;
     border-radius: 10px;
   }
-  .prize-card h3,
-  .players-card h3 {
+  .prize-card h3 {
     font-size: 1.6rem;
     margin-bottom: 18px;
   }
@@ -951,17 +965,8 @@ body,
   .prize-display-list {
     max-height: 720px;
   }
-  .player-list {
-    max-height: 420px;
-  }
-  .player-item {
-    padding: 12px 18px;
-  }
-  .player-list-name {
-    font-size: 1.1rem;
-  }
-  .player-list-meta {
-    font-size: 1rem;
+  .prize-display-list {
+    max-height: none;
   }
   /* 結果テーブル FullHD 版 */
   .results-table-final th,

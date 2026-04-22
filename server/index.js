@@ -398,7 +398,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const prizeIndex = state.winners.length;
+    const prizeIndex = state.prizeCount - 1 - state.winners.length;
     const prizeName = state.prizeNames[prizeIndex] || `景品 ${prizeIndex + 1}`;
     const winner = {
       playerId: id,
