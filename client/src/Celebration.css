@@ -1,0 +1,62 @@
+.celebration-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.celebration-confetti i {
+  position: absolute;
+  left: var(--confetti-x);
+  top: -24px;
+  width: 7px;
+  height: 15px;
+  background: #ef5777;
+  opacity: 0;
+  animation: gala-confetti var(--confetti-duration) ease-in
+    var(--confetti-delay) both;
+}
+.celebration-confetti i:nth-child(3n) {
+  background: #23b8d1;
+  width: 5px;
+  height: 10px;
+}
+.celebration-confetti i:nth-child(5n) {
+  background: #ffd568;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.celebration-confetti i:nth-child(4n) {
+  background: #8062ed;
+  width: 8px;
+  height: 12px;
+}
+.celebration-confetti i:nth-child(7n) {
+  background: #62d9ad;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+@keyframes gala-confetti {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -20px, 0) rotate(0deg);
+  }
+  10% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--confetti-drift), 100vh, 0)
+      rotate(var(--confetti-turn));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration-confetti {
+    display: none;
+  }
+}

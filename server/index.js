@@ -148,7 +148,28 @@ function serializePlayersForHost() {
 }
 
 /**
- * 全体用ステート (景品名はホストにのみ送信)
+ * 会場の投影・受付画面用。カード、認証情報、未発表の景品名は公開しない。
+ */
+function serializeDisplayState() {
+  return {
+    drawnNumbers: state.drawnNumbers,
+    lastDrawn: state.lastDrawn,
+    prizeCount: state.prizeCount,
+    phase: state.phase,
+    winnersCount: state.winners.length,
+    playerCount: state.players.size,
+    connectedCount: Array.from(state.players.values()).filter((p) => p.connected)
+      .length,
+    winners: state.winners.map(({ name, prizeIndex, prizeName }) => ({
+      name,
+      prizeIndex,
+      prizeName,
+    })),
+  };
+}
+
+/**
+ * 全体用ステート (未発表の景品名はホストにのみ送信)
  */
 function broadcastState() {
   const publicState = {
@@ -169,6 +190,8 @@ function broadcastState() {
     winners: state.winners,
     players: serializePlayersForHost(),
   });
+
+  io.to("display").emit("display:update", serializeDisplayState());
 }
 
 /**
@@ -183,6 +206,12 @@ function isHost(socket) {
 // ==============================
 io.on("connection", (socket) => {
   console.log(`[connect] ${socket.id}`);
+
+  // ------ 会場の読み取り専用画面 ------
+  socket.on("display:join", () => {
+    socket.join("display");
+    socket.emit("display:update", serializeDisplayState());
+  });
 
   // ------ ホスト ------
   socket.on("host:join", ({ password } = {}) => {
@@ -306,15 +335,55 @@ io.on("connection", (socket) => {
   });
 
   // ------ プレイヤー ------
-  socket.on("player:join", ({ playerId, token, name }) => {
+  socket.on("player:join", (payload = {}) => {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      socket.emit("error:message", "参加情報のデータ形式が正しくありません。");
+      return;
+    }
+    const { playerId, token, name } = payload;
+    if (
+      (playerId != null && typeof playerId !== "string") ||
+      (token != null && typeof token !== "string") ||
+      (!playerId && token)
+    ) {
+      socket.emit("error:message", "参加情報のデータ形式が正しくありません。");
+      return;
+    }
     const playerName =
       typeof name === "string" && name.trim() ? name.trim().slice(0, 20) : "名無し";
 
-    // 既存プレイヤーとして再接続を試みる
-    if (playerId && typeof playerId === "string" && state.players.has(playerId)) {
+    const sendJoined = (player) => {
+      const winner = state.winners.find((w) => w.playerId === player.id);
+      socket.emit("player:joined", {
+        playerId: player.id,
+        token: player.token,
+        name: player.name,
+        card: player.card,
+        won: winner
+          ? { prizeIndex: winner.prizeIndex, prizeName: winner.prizeName }
+          : null,
+      });
+      broadcastState();
+    };
+
+    // 再起動・リセット後は、以前のカードを新しいカードに置き換えない。
+    if (playerId && !state.players.has(playerId)) {
+      socket.emit("player:sessionExpired", {
+        message:
+          "参加情報を復元できません。サーバーの再起動またはゲームのリセットが行われた可能性があります。受付に確認してください。",
+      });
+      return;
+    }
+
+    // 既存プレイヤーとして再接続を試みる。認証は同じソケットでも省略しない。
+    if (playerId) {
       const existing = state.players.get(playerId);
       if (!token || token !== existing.token) {
         socket.emit("error:message", "このプレイヤーIDは既に使用されています。");
+        return;
+      }
+      if (socket.data.playerId && socket.data.playerId !== playerId) {
+        socket.emit("error:message", "すでに別のプレイヤーとして参加しています。");
         return;
       }
       existing.socketId = socket.id;
@@ -324,13 +393,18 @@ io.on("connection", (socket) => {
         existing.name = playerName;
       }
       socket.data.playerId = existing.id;
-      socket.emit("player:joined", {
-        playerId: existing.id,
-        token: existing.token,
-        name: existing.name,
-        card: existing.card,
-      });
-      broadcastState();
+      sendJoined(existing);
+      return;
+    }
+
+    // 初回参加の要求が重複しても、この接続に発行したカードを返す。
+    const joinedPlayer = state.players.get(socket.data.playerId);
+    if (joinedPlayer) {
+      if (joinedPlayer.socketId !== socket.id) {
+        socket.emit("error:message", "別の接続で参加中です。ページを再読み込みしてください。");
+        return;
+      }
+      sendJoined(joinedPlayer);
       return;
     }
 
@@ -348,13 +422,7 @@ io.on("connection", (socket) => {
     };
     state.players.set(id, player);
     socket.data.playerId = id;
-    socket.emit("player:joined", {
-      playerId: id,
-      token: newToken,
-      name: player.name,
-      card: player.card,
-    });
-    broadcastState();
+    sendJoined(player);
   });
 
   // プレイヤーがビンゴを申告

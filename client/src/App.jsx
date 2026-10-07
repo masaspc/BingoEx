@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PlayerJoin from "./PlayerJoin.jsx";
 import PlayerGame from "./PlayerGame.jsx";
 import HostDashboard from "./HostDashboard.jsx";
+import { ReceptionScreen, ProjectionScreen } from "./VenueScreens.jsx";
 
 export default function App() {
   return (
@@ -10,6 +11,8 @@ export default function App() {
         <Route path="/" element={<PlayerJoin />} />
         <Route path="/game" element={<PlayerGame />} />
         <Route path="/host" element={<HostDashboard />} />
+        <Route path="/reception" element={<ReceptionScreen />} />
+        <Route path="/display" element={<ProjectionScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
