@@ -115,6 +115,10 @@ npm run dev
 
 以下は検証用データで撮影した画面です。画像内の参加リンク・QRコードは開発環境用です。
 
+参加受付:
+
+![名前を入力する参加画面](docs/screenshots/join.png)
+
 司会画面:
 
 ![司会画面](docs/screenshots/host.png)
@@ -127,7 +131,7 @@ npm run dev
 
 ![受付画面](docs/screenshots/reception.png)
 
-投影画面:
+投影画面（当選発表）:
 
 ![会場の投影画面](docs/screenshots/display.png)
 

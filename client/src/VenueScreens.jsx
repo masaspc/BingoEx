@@ -16,6 +16,18 @@ function BingoTitle() {
   );
 }
 
+function PartyBalls() {
+  return (
+    <div className="venue-party-balls" aria-hidden="true">
+      {"BINGO".split("").map((letter, index) => (
+        <span key={letter} data-color={index}>
+          {letter}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function phaseLabel(phase) {
   switch (phase) {
     case "setup":
@@ -65,7 +77,7 @@ export function ReceptionScreen() {
           width: 560,
           margin: 2,
           errorCorrectionLevel: "M",
-          color: { dark: "#101210", light: "#ffffff" },
+          color: { dark: "#24304a", light: "#ffffff" },
         }),
       )
       .then((url) => {
@@ -107,11 +119,12 @@ export function ReceptionScreen() {
           className="card reception-qr-panel"
           aria-labelledby="reception-join-heading"
         >
-          <p className="venue-eyebrow">JOIN THE GAME</p>
+          <PartyBalls />
+          <p className="venue-eyebrow">LET’S PLAY TOGETHER!</p>
           <h2 id="reception-join-heading">
             スマホで読み取って、
             <br />
-            ビンゴに参加。
+            みんなでビンゴ！
           </h2>
           <div className="reception-qr">
             {qrImage ? (
@@ -250,8 +263,9 @@ export function ProjectionScreen() {
 
       <div className="projection-content">
         <section
-          className="projection-latest"
+          className={`projection-latest${latestWinner ? " has-winner" : ""}`}
           aria-labelledby="projection-latest-heading"
+          tabIndex={0}
         >
           {latestWinner && (
             <Celebration
@@ -269,6 +283,9 @@ export function ProjectionScreen() {
             <span
               key={state?.lastDrawn ?? "waiting"}
               className="projection-latest-number"
+              data-color={
+                state?.lastDrawn ? Math.floor((state.lastDrawn - 1) / 15) : 0
+              }
             >
               {state?.lastDrawn ?? "—"}
             </span>
@@ -315,6 +332,13 @@ export function ProjectionScreen() {
           >
             <p className="venue-eyebrow">NUMBER BOARD</p>
             <h2 id="projection-history-heading">これまでの番号</h2>
+            <div className="projection-board-legend" aria-hidden="true">
+              {"BINGO".split("").map((letter, index) => (
+                <span key={letter} data-color={index}>
+                  <b>{letter}</b> {index * 15 + 1}–{(index + 1) * 15}
+                </span>
+              ))}
+            </div>
             <div
               className="projection-number-board"
               aria-label="1 から 75 の抽選状況"
@@ -323,6 +347,7 @@ export function ProjectionScreen() {
                 (number) => (
                   <span
                     key={number}
+                    data-color={Math.floor((number - 1) / 15)}
                     className={`projection-number${drawn.has(number) ? " is-drawn" : ""}${state?.lastDrawn === number ? " is-latest" : ""}`}
                     aria-label={`${number}${state?.lastDrawn === number ? " 最新の番号" : drawn.has(number) ? " 抽選済み" : " 未抽選"}`}
                   >

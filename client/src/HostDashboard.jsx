@@ -13,6 +13,14 @@ const INITIAL_STATE = {
   players: [],
 };
 
+const DRAW_PALETTE = [
+  { color: "#c52b4d", soft: "#ffedf2" },
+  { color: "#127e92", soft: "#e3f8fc" },
+  { color: "#6746d3", soft: "#f0ebff" },
+  { color: "#916408", soft: "#fff6d5" },
+  { color: "#16836a", soft: "#e3f9f0" },
+];
+
 export default function HostDashboard() {
   const [state, setState] = useState(INITIAL_STATE);
   const [prizeCountInput, setPrizeCountInput] = useState("5");
@@ -251,6 +259,8 @@ export default function HostDashboard() {
   };
 
   const displayedNumber = isDrawing ? drawDisplay : state.lastDrawn;
+  const drawPalette =
+    DRAW_PALETTE[displayedNumber ? Math.floor((displayedNumber - 1) / 15) : 0];
   const prizeIndices = Array.from(
     { length: state.prizeCount },
     (_, i) => i,
@@ -332,14 +342,14 @@ export default function HostDashboard() {
       <div className="host-heading-row">
         <div>
           <p className="eyebrow">
-            {isSetup ? "BEFORE THE SPOTLIGHT" : "THE LIVE STAGE"}
+            {isSetup ? "LET’S GET THE PARTY STARTED" : "HERE COMES THE FUN"}
           </p>
           <h1>
             {isSetup
-              ? "イベントを準備する"
+              ? "楽しいビンゴの、準備をしよう！"
               : state.phase === "finished"
-                ? "最高のフィナーレを。"
-                : "次の番号に、期待を。"}
+                ? "みんなに拍手！おつかれさまでした。"
+                : "さあ、次は何番？"}
           </h1>
         </div>
         <span
@@ -399,9 +409,9 @@ export default function HostDashboard() {
               <div className="setup-card">
                 <p className="eyebrow">STEP 01 — PRIZES</p>
                 <h2>
-                  いくつの喜びを、
+                  ワクワクする景品、
                   <br />
-                  用意しますか。
+                  いくつ用意する？
                 </h2>
                 <p className="muted">
                   景品の数を決めて、イベントの準備を始めましょう。
@@ -438,7 +448,7 @@ export default function HostDashboard() {
             ) : (
               <div className="setup-card">
                 <p className="eyebrow">STEP 02 — PRIZE LINEUP</p>
-                <h2>とっておきの景品を。</h2>
+                <h2>お楽しみの景品を、並べよう！</h2>
                 <p className="muted">
                   {state.prizeCount} 等から順に当選。1
                   等の景品が、フィナーレを飾ります。
@@ -498,7 +508,7 @@ export default function HostDashboard() {
           </div>
           <aside className="setup-art" aria-hidden="true">
             <span className="setup-art-kicker">
-              EVERY NUMBER. A NEW POSSIBILITY.
+              GOOD NUMBERS. GREAT MEMORIES.
             </span>
             <div className="setup-art-orbit orbit-one" />
             <div className="setup-art-orbit orbit-two" />
@@ -508,13 +518,13 @@ export default function HostDashboard() {
             </div>
             <div className="setup-art-ball ball-back">68</div>
             <div className="setup-art-caption">
-              <span>LET THE</span>
+              <span>READY, SET,</span>
               <strong>
-                good times
+                BINGO!
                 <br />
-                <em>roll.</em>
+                <em>Let’s play.</em>
               </strong>
-              <p>一つの番号で、会場がひとつに。</p>
+              <p>みんなで笑って、みんなでドキドキ。</p>
             </div>
             <div className="setup-art-bottom">
               <span>B</span>
@@ -546,6 +556,10 @@ export default function HostDashboard() {
               </div>
               <div
                 className={`draw-display ${isDrawing ? "drawing" : ""}`}
+                style={{
+                  "--draw-color": drawPalette.color,
+                  "--draw-soft": drawPalette.soft,
+                }}
                 aria-busy={isDrawing}
               >
                 <div className="draw-orbit orbit-outer" />
@@ -567,7 +581,7 @@ export default function HostDashboard() {
                 </div>
                 <div className="draw-label">
                   {isDrawing
-                    ? "運命の番号を抽選中"
+                    ? "ドキドキ…次の番号は？"
                     : state.lastDrawn
                       ? "最新の番号"
                       : "準備はいいですか？"}
@@ -624,9 +638,7 @@ export default function HostDashboard() {
                     .map((n, i) => (
                       <span
                         key={n}
-                        className={
-                          i === 0 ? "recent-number latest" : "recent-number"
-                        }
+                        className={`recent-number column-${Math.floor((n - 1) / 15)} ${i === 0 ? "latest" : ""}`}
                       >
                         {n}
                       </span>
@@ -637,7 +649,7 @@ export default function HostDashboard() {
                 {Array.from({ length: 75 }, (_, i) => i + 1).map((n) => (
                   <div
                     key={n}
-                    className={`drawn-cell ${state.drawnNumbers.includes(n) ? "hit" : ""} ${state.lastDrawn === n ? "last" : ""}`}
+                    className={`drawn-cell column-${Math.floor((n - 1) / 15)} ${state.drawnNumbers.includes(n) ? "hit" : ""} ${state.lastDrawn === n ? "last" : ""}`}
                     aria-label={`${n}${state.drawnNumbers.includes(n) ? " 抽選済み" : " 未抽選"}`}
                   >
                     {n}
@@ -789,7 +801,7 @@ export default function HostDashboard() {
               <Icon name="trophy" />
             </span>
             <div>
-              <p className="eyebrow">THANK YOU FOR PLAYING</p>
+              <p className="eyebrow">WHAT A FUN GAME!</p>
               <h2>すべての景品が、当選者のもとへ。</h2>
               <p>ご参加ありがとうございました。</p>
             </div>
@@ -839,7 +851,7 @@ export default function HostDashboard() {
             <div className="winner-medal" aria-hidden="true">
               <Icon name="trophy" />
             </div>
-            <p className="eyebrow">A MOMENT TO CELEBRATE</p>
+            <p className="eyebrow">HURRAY! WE HAVE A WINNER!</p>
             <div className="winner-rank">
               {winnerPopup.prizeIndex + 1}
               <span>等 当選</span>
@@ -876,7 +888,7 @@ function Wordmark() {
     <span className="wordmark">
       BINGO <em>EX</em>
       <span className="wordmark-star" aria-hidden="true">
-        ✳
+        ✦
       </span>
     </span>
   );

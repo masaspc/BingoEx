@@ -36,7 +36,7 @@ function PlayerWinDialog({ won, onClose }) {
         aria-modal="true"
         aria-labelledby="player-win-title"
       >
-        <p className="player-eyebrow">THE MOMENT IS YOURS</p>
+        <p className="player-eyebrow">YOU DID IT! LET’S CELEBRATE!</p>
         <div className="player-win-medal" aria-hidden="true">
           <span>✦</span>
         </div>
@@ -279,7 +279,7 @@ export default function PlayerGame() {
 
       <div className="player-greeting">
         <div>
-          <p className="player-eyebrow">YOUR NIGHT. YOUR CARD.</p>
+          <p className="player-eyebrow">LET’S MAKE IT A BINGO!</p>
           <h1>
             <span className="player-name">{myName}</span>
             <small>さん</small>
@@ -356,7 +356,7 @@ export default function PlayerGame() {
                 return (
                   <div
                     key={`${ri}-${ci}`}
-                    className={`bingo-cell ${marked ? "marked" : ""} ${cell.free ? "free" : ""} ${!cell.free && cell.number === state.lastDrawn ? "cell-latest" : ""}`}
+                    className={`bingo-cell bingo-col-${ci} ${marked ? "marked" : ""} ${cell.free ? "free" : ""} ${!cell.free && cell.number === state.lastDrawn ? "cell-latest" : ""}`}
                   >
                     {cell.free ? (
                       <>

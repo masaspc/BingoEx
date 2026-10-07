@@ -11,21 +11,32 @@
   top: -24px;
   width: 7px;
   height: 15px;
-  background: #d4b46a;
+  background: #ef5777;
   opacity: 0;
   animation: gala-confetti var(--confetti-duration) ease-in
     var(--confetti-delay) both;
 }
 .celebration-confetti i:nth-child(3n) {
-  background: #f5f1e7;
+  background: #23b8d1;
   width: 5px;
   height: 10px;
 }
 .celebration-confetti i:nth-child(5n) {
-  background: #d7f279;
+  background: #ffd568;
   width: 7px;
   height: 7px;
   border-radius: 50%;
+}
+.celebration-confetti i:nth-child(4n) {
+  background: #8062ed;
+  width: 8px;
+  height: 12px;
+}
+.celebration-confetti i:nth-child(7n) {
+  background: #62d9ad;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
 }
 @keyframes gala-confetti {
   0% {

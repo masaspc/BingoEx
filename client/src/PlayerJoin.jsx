@@ -34,14 +34,14 @@ export default function PlayerJoin() {
 
       <div className="join-layout">
         <section className="join-intro">
-          <p className="player-eyebrow">A LITTLE LUCK. A GREAT NIGHT.</p>
+          <p className="player-eyebrow">LET’S PLAY. LET’S CELEBRATE!</p>
           <h1>
-            その一瞬を、
+            ワクワクを、
             <br />
-            <span>みんなで。</span>
+            <span>みんなで！</span>
           </h1>
           <p className="join-description">
-            あなたのカードで、今夜の主役に。
+            次の番号に、ドキドキしよう。
             <br />
             名前を入れて、ビンゴの輪に加わろう。
           </p>
@@ -84,7 +84,7 @@ export default function PlayerJoin() {
               />
             </svg>
           </div>
-          <h2 id="join-title">準備はいいですか？</h2>
+          <h2 id="join-title">さあ、ビンゴの時間！</h2>
           <p className="join-form-description">
             まずは、会場で呼ばれるお名前を。
           </p>
@@ -108,7 +108,7 @@ export default function PlayerJoin() {
               className="btn btn-primary join-submit"
               disabled={!name.trim()}
             >
-              <span>参加する</span>
+              <span>カードを受け取る</span>
               <svg
                 width="22"
                 height="22"
