@@ -33,6 +33,10 @@ echo "================================================"
 
 # --- 1. システム更新 + 基本パッケージ ---
 echo "[1/7] パッケージ更新..."
+while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1; do
+  echo "  自動更新の完了を待っています..."
+  sleep 5
+done
 apt-get update -qq
 apt-get upgrade -y -qq
 apt-get install -y -qq curl git nginx certbot python3-certbot-nginx ufw
