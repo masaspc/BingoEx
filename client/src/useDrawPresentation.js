@@ -78,10 +78,10 @@ export default function useDrawPresentation(state, connected) {
       : "—"
     : state?.lastDrawn;
   const labels = {
-    ready: "まもなく抽選スタート",
-    fast: "運命の番号、回転中！",
-    slow: "だんだん、ゆっくり…",
-    hold: "次の番号は…",
+    ready: "抽選中…",
+    fast: "抽選中…",
+    slow: "抽選中…",
+    hold: "抽選中…",
     waiting: "結果を確認中…",
     reveal: "この番号に決定！",
     idle: "最新の番号",
