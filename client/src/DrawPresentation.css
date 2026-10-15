@@ -1,0 +1,106 @@
+/* Shared stage language for the operator and every projector. */
+.draw-fx {
+  position: relative;
+  isolation: isolate;
+}
+.draw-fx .draw-burst {
+  position: absolute;
+  top: 18%;
+  right: 12%;
+  font-size: clamp(30px, 4vw, 72px);
+  color: #e4a82b;
+  pointer-events: none;
+  opacity: 0;
+}
+.draw-fx-fast .projection-latest-number {
+  animation: suspense-roll 120ms ease-in-out infinite;
+}
+.draw-fx-slow .projection-latest-number,
+.draw-fx-slow .draw-number.draw-spinning {
+  animation: suspense-roll 400ms ease-in-out infinite;
+}
+.draw-fx-slow .draw-orbit.orbit-outer {
+  animation-duration: 3s;
+}
+.draw-fx-hold .draw-number.draw-spinning,
+.draw-fx-hold .projection-latest-number {
+  animation: suspense-hold 450ms ease-out both;
+}
+.draw-fx-hold .draw-orbit {
+  animation-play-state: paused !important;
+}
+.draw-fx-waiting .draw-number.draw-spinning,
+.draw-fx-waiting .projection-latest-number,
+.draw-fx-ready .draw-number.draw-spinning,
+.draw-fx-ready .projection-latest-number {
+  animation: none;
+}
+.draw-fx-reveal .draw-number,
+.draw-fx-reveal .projection-latest-number {
+  animation: suspense-reveal 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.draw-fx-reveal .draw-burst {
+  animation: suspense-spark 650ms ease-out both;
+}
+.draw-fx.draw-fx-reveal {
+  box-shadow:
+    0 0 0 3px #efc35970,
+    0 15px 55px #efc35930;
+}
+@keyframes suspense-roll {
+  0%,
+  100% {
+    transform: translateY(-2px) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(2px) rotate(2deg);
+  }
+}
+@keyframes suspense-hold {
+  from {
+    transform: scale(0.94);
+  }
+  to {
+    transform: scale(0.88);
+  }
+}
+@keyframes suspense-reveal {
+  0% {
+    transform: scale(0.78);
+    filter: brightness(1.25);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+}
+@keyframes suspense-spark {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-25deg);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2) rotate(25deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .draw-fx .draw-number,
+  .draw-fx .projection-latest-number,
+  .draw-fx .draw-orbit,
+  .draw-fx .draw-burst {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+.draw-fx-idle .draw-number,
+.draw-fx-idle .projection-latest-number {
+  animation: none;
+}

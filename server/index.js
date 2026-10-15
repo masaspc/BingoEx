@@ -13,7 +13,9 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
 const HOST_PASSWORD = process.env.HOST_PASSWORD || "";
 const CLAIM_COOLDOWN_MS = 500;
-const DRAW_COOLDOWN_MS = 300;
+const DRAW_LEAD_MS = 200;
+const DRAW_REVEAL_MS = 3510;
+const DRAW_TOTAL_MS = 4160;
 
 const app = express();
 if (NODE_ENV !== "production") {
@@ -39,6 +41,7 @@ const initialState = () => ({
   drawnNumbers: [],
   // 最新の抽選番号
   lastDrawn: null,
+  draw: null,
   // 景品数（上限）
   prizeCount: 5,
   // 景品名の配列 (index 0 が最初の当選者に割り当て)
@@ -50,6 +53,18 @@ const initialState = () => ({
 });
 
 let state = initialState();
+let revealTimer;
+let finishTimer;
+
+function cancelDraw() {
+  clearTimeout(revealTimer);
+  clearTimeout(finishTimer);
+  state.draw = null;
+}
+
+function drawSnapshot() {
+  return { draw: state.draw, serverNow: Date.now() };
+}
 
 // ==============================
 // ヘルパー関数
@@ -152,14 +167,16 @@ function serializePlayersForHost() {
  */
 function serializeDisplayState() {
   return {
+    ...drawSnapshot(),
     drawnNumbers: state.drawnNumbers,
     lastDrawn: state.lastDrawn,
     prizeCount: state.prizeCount,
     phase: state.phase,
     winnersCount: state.winners.length,
     playerCount: state.players.size,
-    connectedCount: Array.from(state.players.values()).filter((p) => p.connected)
-      .length,
+    connectedCount: Array.from(state.players.values()).filter(
+      (p) => p.connected,
+    ).length,
     winners: state.winners.map(({ name, prizeIndex, prizeName }) => ({
       name,
       prizeIndex,
@@ -173,6 +190,7 @@ function serializeDisplayState() {
  */
 function broadcastState() {
   const publicState = {
+    ...drawSnapshot(),
     drawnNumbers: state.drawnNumbers,
     lastDrawn: state.lastDrawn,
     prizeCount: state.prizeCount,
@@ -206,6 +224,9 @@ function isHost(socket) {
 // ==============================
 io.on("connection", (socket) => {
   console.log(`[connect] ${socket.id}`);
+  socket.on("clock:sync", (ack) => {
+    if (typeof ack === "function") ack(Date.now());
+  });
 
   // ------ 会場の読み取り専用画面 ------
   socket.on("display:join", () => {
@@ -227,6 +248,7 @@ io.on("connection", (socket) => {
     console.log(`[host:join] ${socket.id} authenticated, phase=${state.phase}`);
     socket.emit("host:authOk");
     socket.emit("host:update", {
+      ...drawSnapshot(),
       drawnNumbers: state.drawnNumbers,
       lastDrawn: state.lastDrawn,
       prizeCount: state.prizeCount,
@@ -244,7 +266,10 @@ io.on("connection", (socket) => {
       `[host:setPrizeCount] from ${socket.id} isHost=${isHost(socket)} count=${count}`,
     );
     if (!isHost(socket)) {
-      socket.emit("error:message", "ホスト認証が切れました。ページを再読み込みしてください。");
+      socket.emit(
+        "error:message",
+        "ホスト認証が切れました。ページを再読み込みしてください。",
+      );
       return;
     }
     const n = Number(count);
@@ -252,9 +277,12 @@ io.on("connection", (socket) => {
       socket.emit("error:message", "景品数は 1〜50 の範囲で指定してください。");
       return;
     }
+    cancelDraw();
     state.prizeCount = n;
     // 既存の景品名を長さに揃える
-    const names = Array.isArray(state.prizeNames) ? state.prizeNames.slice(0, n) : [];
+    const names = Array.isArray(state.prizeNames)
+      ? state.prizeNames.slice(0, n)
+      : [];
     while (names.length < n) names.push("");
     state.prizeNames = names;
     state.phase = "prizeInput";
@@ -269,7 +297,10 @@ io.on("connection", (socket) => {
       `state.prizeCount=${state.prizeCount} state.phase=${state.phase}`,
     );
     if (!isHost(socket)) {
-      socket.emit("error:message", "ホスト認証が切れました。ページを再読み込みしてください。");
+      socket.emit(
+        "error:message",
+        "ホスト認証が切れました。ページを再読み込みしてください。",
+      );
       return;
     }
     if (!Array.isArray(names)) {
@@ -279,6 +310,7 @@ io.on("connection", (socket) => {
     // prizeCount に満たない/超える場合は自動で調整して受理する (UI 同期の race 防止)
     let adjusted = names.slice(0, state.prizeCount);
     while (adjusted.length < state.prizeCount) adjusted.push("");
+    cancelDraw();
     state.prizeNames = adjusted.map((v, i) =>
       typeof v === "string" && v.trim() ? v.trim() : `景品 ${i + 1}`,
     );
@@ -287,20 +319,19 @@ io.on("connection", (socket) => {
   });
 
   // 番号を引く
-  socket.on("host:draw", () => {
+  socket.on("host:draw", (ack) => {
     if (!isHost(socket)) return;
-    // 連打の抑止
-    const now = Date.now();
-    if (socket.data.lastDrawAt && now - socket.data.lastDrawAt < DRAW_COOLDOWN_MS) {
-      return;
-    }
-    socket.data.lastDrawAt = now;
+    // One shared lock covers all hosts, including the result emphasis.
+    if (state.draw) return;
     if (state.phase !== "playing") {
       socket.emit("error:message", "まだゲームが開始されていません。");
       return;
     }
     if (state.winners.length >= state.prizeCount) {
-      socket.emit("error:message", "景品数の上限に達したため、これ以上抽選できません。");
+      socket.emit(
+        "error:message",
+        "景品数の上限に達したため、これ以上抽選できません。",
+      );
       return;
     }
     if (state.drawnNumbers.length >= 75) {
@@ -311,9 +342,31 @@ io.on("connection", (socket) => {
     const drawnSet = new Set(state.drawnNumbers);
     for (let i = 1; i <= 75; i++) if (!drawnSet.has(i)) remaining.push(i);
     const next = remaining[Math.floor(Math.random() * remaining.length)];
-    state.drawnNumbers.push(next);
-    state.lastDrawn = next;
+    const startedAt = Date.now() + DRAW_LEAD_MS;
+    const draw = {
+      id: uuidv4(),
+      startedAt,
+      revealAt: startedAt + DRAW_REVEAL_MS,
+      endsAt: startedAt + DRAW_TOTAL_MS,
+      revealed: false,
+    };
+    state.draw = draw;
+    if (typeof ack === "function") ack({ accepted: true });
     broadcastState();
+    // The result remains private until reveal; history, cards and claims use
+    // only committed numbers. Disconnecting a host does not cancel a draw.
+    revealTimer = setTimeout(() => {
+      if (state.draw !== draw || state.phase !== "playing") return;
+      state.drawnNumbers.push(next);
+      state.lastDrawn = next;
+      draw.revealed = true;
+      broadcastState();
+    }, draw.revealAt - Date.now());
+    finishTimer = setTimeout(() => {
+      if (state.draw !== draw) return;
+      state.draw = null;
+      broadcastState();
+    }, draw.endsAt - Date.now());
   });
 
   // ゲームリセット — 全プレイヤーを退出させ名前入力からやり直し
@@ -323,6 +376,7 @@ io.on("connection", (socket) => {
     for (const [, player] of state.players) {
       io.to(player.socketId).emit("player:forceReset");
     }
+    cancelDraw();
     state = initialState();
     broadcastState();
   });
@@ -330,6 +384,7 @@ io.on("connection", (socket) => {
   // 景品数を変更するために setup に戻す
   socket.on("host:backToSetup", () => {
     if (!isHost(socket)) return;
+    cancelDraw();
     state.phase = "setup";
     broadcastState();
   });
@@ -350,7 +405,9 @@ io.on("connection", (socket) => {
       return;
     }
     const playerName =
-      typeof name === "string" && name.trim() ? name.trim().slice(0, 20) : "名無し";
+      typeof name === "string" && name.trim()
+        ? name.trim().slice(0, 20)
+        : "名無し";
 
     const sendJoined = (player) => {
       const winner = state.winners.find((w) => w.playerId === player.id);
@@ -379,11 +436,17 @@ io.on("connection", (socket) => {
     if (playerId) {
       const existing = state.players.get(playerId);
       if (!token || token !== existing.token) {
-        socket.emit("error:message", "このプレイヤーIDは既に使用されています。");
+        socket.emit(
+          "error:message",
+          "このプレイヤーIDは既に使用されています。",
+        );
         return;
       }
       if (socket.data.playerId && socket.data.playerId !== playerId) {
-        socket.emit("error:message", "すでに別のプレイヤーとして参加しています。");
+        socket.emit(
+          "error:message",
+          "すでに別のプレイヤーとして参加しています。",
+        );
         return;
       }
       existing.socketId = socket.id;
@@ -401,7 +464,10 @@ io.on("connection", (socket) => {
     const joinedPlayer = state.players.get(socket.data.playerId);
     if (joinedPlayer) {
       if (joinedPlayer.socketId !== socket.id) {
-        socket.emit("error:message", "別の接続で参加中です。ページを再読み込みしてください。");
+        socket.emit(
+          "error:message",
+          "別の接続で参加中です。ページを再読み込みしてください。",
+        );
         return;
       }
       sendJoined(joinedPlayer);
@@ -435,7 +501,8 @@ io.on("connection", (socket) => {
     if (player.socketId !== socket.id) return;
     // 連打防止
     const now = Date.now();
-    if (player.lastClaimAt && now - player.lastClaimAt < CLAIM_COOLDOWN_MS) return;
+    if (player.lastClaimAt && now - player.lastClaimAt < CLAIM_COOLDOWN_MS)
+      return;
     player.lastClaimAt = now;
     // playing フェーズ以外では拒否
     if (state.phase !== "playing") {
@@ -453,7 +520,10 @@ io.on("connection", (socket) => {
       return;
     }
     if (state.winners.length >= state.prizeCount) {
-      socket.emit("error:message", "景品数の上限に達しているため申告できません。");
+      socket.emit(
+        "error:message",
+        "景品数の上限に達しているため申告できません。",
+      );
       return;
     }
 
@@ -479,6 +549,7 @@ io.on("connection", (socket) => {
     });
 
     if (state.winners.length >= state.prizeCount) {
+      cancelDraw();
       state.phase = "finished";
     }
 
@@ -532,5 +603,7 @@ if (NODE_ENV === "production") {
 }
 
 server.listen(PORT, () => {
-  console.log(`BingoEx server listening on http://localhost:${PORT} [${NODE_ENV}]`);
+  console.log(
+    `BingoEx server listening on http://localhost:${PORT} [${NODE_ENV}]`,
+  );
 });

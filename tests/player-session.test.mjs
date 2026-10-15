@@ -91,8 +91,15 @@ async function hostSnapshot() {
   return action(host, "host:join", {}, "host:update");
 }
 
-async function displaySnapshot(viewer) {
-  return action(viewer, "display:join", {}, "display:update");
+async function displaySnapshot(viewer, predicate) {
+  return action(
+    viewer,
+    "display:join",
+    {},
+    "display:update",
+    viewer,
+    predicate,
+  );
 }
 
 before(async () => {
@@ -333,6 +340,8 @@ test("display viewers receive counts without credentials or unawarded prizes and
   assert.deepEqual(
     Object.keys(initial).sort(),
     [
+      "draw",
+      "serverNow",
       "drawnNumbers",
       "lastDrawn",
       "prizeCount",
@@ -367,7 +376,10 @@ test("display viewers receive counts without credentials or unawarded prizes and
   viewer.emit("host:draw");
   viewer.emit("host:reset");
   const unchanged = await displaySnapshot(viewer);
-  assert.deepEqual(unchanged, snapshot);
+  assert.deepEqual(
+    { ...unchanged, serverNow: 0 },
+    { ...snapshot, serverNow: 0 },
+  );
   const disconnected = waitForEvent(
     viewer,
     "display:update",
@@ -407,7 +419,7 @@ function hasBingo(card, drawnNumbers) {
 
 test(
   "manual claims keep arrival order and reconnect restores the personal prize in playing and finished phases",
-  { timeout: 40000 },
+  { timeout: 400000 },
   async () => {
     const first = await connect();
     const second = await connect();
@@ -421,7 +433,7 @@ test(
       !hasBingo(firstJoined.card, drawnNumbers) ||
       !hasBingo(secondJoined.card, drawnNumbers)
     ) {
-      await delay(310); // Keep the real host draw cooldown enabled.
+      await delay(700); // Preserve the result-emphasis lock before the next draw.
       const updated = await action(
         host,
         "host:draw",
@@ -441,7 +453,10 @@ test(
       "player:won",
     );
     assert.deepEqual(secondPrize, { prizeIndex: 1, prizeName: "二等の景品" });
-    const playingDisplay = await displaySnapshot(viewer);
+    const playingDisplay = await displaySnapshot(
+      viewer,
+      (s) => s.winnersCount === 1,
+    );
     assert.equal(playingDisplay.phase, "playing");
     assert.deepEqual(playingDisplay.winners, [
       { name: "後に参加", ...secondPrize },
@@ -456,6 +471,11 @@ test(
     assert.deepEqual(restored.card, secondJoined.card);
     assert.deepEqual(restored.won, secondPrize);
 
+    // A final claim based on already committed numbers cancels an ongoing draw.
+    await delay(700);
+    await action(host, "host:draw", undefined, "host:update", host, (s) =>
+      Boolean(s.draw),
+    );
     const firstPrize = await action(
       first,
       "player:claimBingo",
@@ -463,7 +483,16 @@ test(
       "player:won",
     );
     assert.deepEqual(firstPrize, { prizeIndex: 0, prizeName: "一等の景品" });
-    const finished = await displaySnapshot(viewer);
+    const finished = await displaySnapshot(
+      viewer,
+      (s) => s.phase === "finished",
+    );
+    assert.equal(finished.draw, null);
+    await delay(4400);
+    assert.equal(
+      (await hostSnapshot()).drawnNumbers.length,
+      drawnNumbers.length,
+    );
     assert.equal(finished.phase, "finished");
     assert.deepEqual(finished.winners, [
       { name: "後に参加", ...secondPrize },
@@ -492,3 +521,118 @@ test(
     );
   },
 );
+
+test("shared draw hides the result, locks every host and recovers late/reconnected displays", async () => {
+  await configureGame();
+  const displayA = await connect();
+  const displayB = await connect();
+  await displaySnapshot(displayA);
+  await displaySnapshot(displayB);
+  const otherHost = await connect();
+  await action(otherHost, "host:join", {}, "host:update");
+  const startA = waitForEvent(displayA, "display:update", (s) =>
+    Boolean(s.draw),
+  );
+  const startB = waitForEvent(displayB, "display:update", (s) =>
+    Boolean(s.draw),
+  );
+  const started = await action(
+    host,
+    "host:draw",
+    undefined,
+    "host:update",
+    host,
+    (s) => Boolean(s.draw),
+  );
+  assert.deepEqual((await startA).draw, started.draw);
+  assert.deepEqual((await startB).draw, started.draw);
+  assert.equal(started.draw.revealAt - started.draw.startedAt, 3510);
+  assert.equal(started.draw.endsAt - started.draw.startedAt, 4160);
+  assert.deepEqual(
+    Object.keys(started.draw).sort(),
+    ["id", "startedAt", "revealAt", "endsAt", "revealed"].sort(),
+  );
+  for (let i = 0; i < 10; i++) {
+    host.emit("host:draw");
+    otherHost.emit("host:draw");
+  }
+  displayB.disconnect();
+  const player = await connect();
+  const playerState = waitForEvent(player, "state:update");
+  await joinPlayer(player);
+  assert.deepEqual((await playerState).drawnNumbers, []);
+  await delay(1500);
+  const late = await connect();
+  const lateState = await displaySnapshot(late);
+  assert.equal(lateState.draw.id, started.draw.id);
+  assert.equal(lateState.lastDrawn, null);
+  assert.deepEqual(lateState.drawnNumbers, []);
+  const resultA = waitForEvent(
+    displayA,
+    "display:update",
+    (s) => s.draw?.revealed,
+  );
+  const resultLate = waitForEvent(
+    late,
+    "display:update",
+    (s) => s.draw?.revealed,
+  );
+  const revealed = await waitForEvent(
+    host,
+    "host:update",
+    (s) => s.draw?.revealed,
+  );
+  assert.ok(revealed.serverNow >= started.draw.revealAt);
+  assert.equal(revealed.drawnNumbers.length, 1);
+  assert.equal((await resultA).lastDrawn, revealed.lastDrawn);
+  assert.equal((await resultLate).lastDrawn, revealed.lastDrawn);
+  host.emit("host:draw"); // The emphasis interval is locked too.
+  assert.equal((await hostSnapshot()).draw.id, started.draw.id);
+  await waitForEvent(host, "host:update", (s) => !s.draw);
+  const reconnected = waitForEvent(displayB, "connect");
+  displayB.connect();
+  await reconnected;
+  assert.deepEqual(
+    (await displaySnapshot(displayB)).drawnNumbers,
+    revealed.drawnNumbers,
+  );
+  const second = await action(
+    host,
+    "host:draw",
+    undefined,
+    "host:update",
+    host,
+    (s) => Boolean(s.draw),
+  );
+  assert.notEqual(second.draw.id, started.draw.id);
+  host.disconnect();
+  const secondResult = await waitForEvent(
+    displayA,
+    "display:update",
+    (s) => s.drawnNumbers.length === 2,
+  );
+  assert.equal(new Set(secondResult.drawnNumbers).size, 2);
+});
+
+test("reset and setup interruption cancel pending results and timers", async () => {
+  for (const event of ["host:reset", "host:backToSetup"]) {
+    await configureGame();
+    await action(host, "host:draw", undefined, "host:update", host, (s) =>
+      Boolean(s.draw),
+    );
+    const cancelled = await action(
+      host,
+      event,
+      {},
+      "host:update",
+      host,
+      (s) => s.phase === "setup",
+    );
+    assert.equal(cancelled.draw, null);
+    await delay(4400);
+    const snapshot = await hostSnapshot();
+    assert.equal(snapshot.lastDrawn, null);
+    assert.deepEqual(snapshot.drawnNumbers, []);
+    assert.equal(snapshot.draw, null);
+  }
+});
