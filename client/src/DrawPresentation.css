@@ -12,7 +12,8 @@
   pointer-events: none;
   opacity: 0;
 }
-.draw-fx-fast .projection-latest-number {
+.draw-fx-fast .projection-latest-number,
+.draw-fx-fast .draw-number.draw-spinning {
   animation: suspense-roll 120ms ease-in-out infinite;
 }
 .draw-fx-slow .projection-latest-number,

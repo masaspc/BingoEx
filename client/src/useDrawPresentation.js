@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import socket from "./socket.js";
+import { shuffleNumber } from "./drawShuffle.js";
 import "./DrawPresentation.css";
 
 // Epoch time anchored to a monotonic clock; estimate transport latency using RTT.
@@ -69,21 +70,12 @@ export default function useDrawPresentation(state, connected) {
   }
   const pending = Boolean(draw && !draw.revealed);
   const elapsed = Math.max(0, now - (draw?.startedAt ?? now));
-  // Decorative sequence only: independent of the private server result.
-  const tick =
-    elapsed < 1440
-      ? Math.floor(elapsed / 60)
-      : 24 +
-        [80, 175, 285, 410, 550, 705, 875, 1060, 1260, 1475].filter(
-          (at) => elapsed - 1440 >= at,
-        ).length;
-  const seed = draw
-    ? [...draw.id].reduce((sum, c) => sum + c.charCodeAt(0), 0)
-    : 0;
+  // Keep a numeric ball throughout the suspense, including the short hold.
+  // Reduced motion uses fewer updates, never a text-only replacement.
   const number = pending
-    ? !connected || reduced || ["ready", "hold", "waiting"].includes(phase)
-      ? "?"
-      : ((seed + tick * 29) % 75) + 1
+    ? connected
+      ? shuffleNumber(draw.id, elapsed, reduced)
+      : "—"
     : state?.lastDrawn;
   const labels = {
     ready: "まもなく抽選スタート",

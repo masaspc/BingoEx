@@ -291,7 +291,7 @@ export function ProjectionScreen() {
               key={`${state?.draw?.id ?? "idle"}-${presentation.phase}`}
               className="projection-latest-number"
               data-color={
-                typeof presentation.number === "number"
+                !presentation.pending && typeof presentation.number === "number"
                   ? Math.floor((presentation.number - 1) / 15)
                   : 0
               }

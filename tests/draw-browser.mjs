@@ -46,11 +46,37 @@ try {
   await host.getByRole("button", { name: /景品名を設定する/ }).click();
   await host.getByRole("button", { name: /ゲームを始める/ }).click();
   const display = await page("/display", { width: 1920, height: 1080 });
+  const reducedHost = await page(
+    "/host",
+    { width: 390, height: 844 },
+    "reduce",
+  );
   const reduced = await page("/display", { width: 390, height: 844 }, "reduce");
   await Promise.all(pages.map(noOverflow));
   for (const p of pages)
     await p.evaluate(() => {
       window.phases = [];
+      window.numbers = [];
+      new MutationObserver(() => {
+        const value = document.querySelector(
+          ".draw-number, .projection-latest-number",
+        )?.textContent;
+        const phase =
+          document.querySelector("[data-draw-phase]")?.dataset.drawPhase;
+        if (
+          window.numbers.at(-1)?.value !== value ||
+          window.numbers.at(-1)?.phase !== phase
+        )
+          window.numbers.push({
+            value,
+            phase,
+            at: performance.timeOrigin + performance.now(),
+          });
+      }).observe(document.body, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
       new MutationObserver(() => {
         const phase =
           document.querySelector("[data-draw-phase]")?.dataset.drawPhase;
@@ -75,7 +101,13 @@ try {
       .evaluate((e) => getComputedStyle(e).animationName),
     "none",
   );
-  assert.equal(await number(reduced), "?");
+  assert.equal(
+    await reducedHost
+      .locator(".draw-number")
+      .evaluate((e) => getComputedStyle(e).animationName),
+    "none",
+  );
+  assert.match(await number(reduced), /^\d+$/);
   assert.equal(await host.locator(".history-count").innerText(), "0 / 75");
   assert.equal(
     await display.locator(".projection-draw-count").innerText(),
@@ -93,7 +125,7 @@ try {
   await waitPhase(display, "slow");
   await waitPhase(late, "slow");
   await waitPhase(display, "hold");
-  assert.equal(await number(display), "?");
+  assert.match(await number(display), /^\d+$/);
   await Promise.all(pages.map((p) => waitPhase(p, "reveal")));
   const results = await Promise.all(pages.map(number));
   assert.equal(new Set(results).size, 1);
@@ -103,7 +135,9 @@ try {
   });
   await Promise.all(pages.map((p) => waitPhase(p, "idle")));
   const timings = await Promise.all(
-    [host, display, reduced].map((p) => p.evaluate(() => window.phases)),
+    [host, display, reduced, reducedHost].map((p) =>
+      p.evaluate(() => window.phases),
+    ),
   );
   for (const name of ["fast", "slow", "hold", "reveal"]) {
     const times = timings.map((t) => t.find((x) => x.phase === name)?.at);
@@ -112,6 +146,24 @@ try {
       Math.max(...times) - Math.min(...times) < 180,
       `${name}: ${times}`,
     );
+  }
+  const numericSamples = await Promise.all(
+    [host, display, reducedHost, reduced].map((p) =>
+      p.evaluate(() => window.numbers),
+    ),
+  );
+  for (const [index, samples] of numericSamples.entries()) {
+    const spinning = samples.filter((s) => ["fast", "slow"].includes(s.phase));
+    assert.ok(
+      spinning.every((s) => /^\d+$/.test(s.value)),
+      JSON.stringify(spinning),
+    );
+    assert.ok(
+      new Set(spinning.map((s) => s.value)).size >= (index < 2 ? 20 : 6),
+      JSON.stringify(spinning),
+    );
+    const hold = samples.filter((s) => s.phase === "hold");
+    assert.equal(new Set(hold.map((s) => s.value)).size, 1);
   }
   // Repeated draw with an offline projection. Restore after authoritative result.
   await host.getByRole("button", { name: /次の番号を抽選する/ }).click();
@@ -147,6 +199,7 @@ try {
       {
         result: "PASS",
         timings,
+        numericSamples,
         screenshots: [
           "/tmp/bingoex-projection-fast.png",
           "/tmp/bingoex-host-mobile-fast.png",

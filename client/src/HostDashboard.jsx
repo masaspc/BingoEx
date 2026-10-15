@@ -246,7 +246,7 @@ export default function HostDashboard() {
   const displayedNumber = presentation.number;
   const drawPalette =
     DRAW_PALETTE[
-      typeof displayedNumber === "number"
+      !presentation.pending && typeof displayedNumber === "number"
         ? Math.floor((displayedNumber - 1) / 15)
         : 0
     ];
@@ -559,7 +559,7 @@ export default function HostDashboard() {
                 <div className="draw-orbit orbit-inner" />
                 <div className="draw-spotlight" />
                 <span className="draw-column-label">
-                  {typeof displayedNumber === "number"
+                  {!presentation.pending && typeof displayedNumber === "number"
                     ? ["B", "I", "N", "G", "O"][
                         Math.floor((displayedNumber - 1) / 15)
                       ]
