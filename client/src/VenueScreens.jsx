@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useDrawPresentation from "./useDrawPresentation.js";
 import useDisplayState from "./useDisplayState.js";
 import Celebration from "./Celebration.jsx";
 import "./VenueScreens.css";
@@ -233,6 +234,7 @@ export function ReceptionScreen() {
 
 export function ProjectionScreen() {
   const { state, connected, synced } = useDisplayState();
+  const presentation = useDrawPresentation(state, connected && synced);
   const drawnNumbers = state?.drawnNumbers ?? [];
   const drawn = new Set(drawnNumbers);
   const winners = state?.winners ?? [];
@@ -263,31 +265,38 @@ export function ProjectionScreen() {
 
       <div className="projection-content">
         <section
-          className={`projection-latest${latestWinner ? " has-winner" : ""}`}
+          className={`projection-latest draw-fx draw-fx-${presentation.phase}${latestWinner ? " has-winner" : ""}`}
+          data-draw-phase={presentation.phase}
           aria-labelledby="projection-latest-heading"
           tabIndex={0}
         >
+          <span className="draw-burst" aria-hidden="true">
+            ✦
+          </span>
           {latestWinner && (
             <Celebration
               key={`winner-${latestWinner.prizeIndex}-${latestWinner.name}`}
             />
           )}
           <p className="venue-eyebrow">LIVE DRAW</p>
-          <h2 id="projection-latest-heading">最新の番号</h2>
+          <h2 id="projection-latest-heading">{presentation.label}</h2>
           <div
             role="status"
             aria-labelledby="projection-latest-heading"
-            aria-live="polite"
+            aria-live={presentation.pending ? "off" : "polite"}
+            aria-busy={presentation.pending}
             aria-atomic="true"
           >
             <span
-              key={state?.lastDrawn ?? "waiting"}
+              key={`${state?.draw?.id ?? "idle"}-${presentation.phase}`}
               className="projection-latest-number"
               data-color={
-                state?.lastDrawn ? Math.floor((state.lastDrawn - 1) / 15) : 0
+                typeof presentation.number === "number"
+                  ? Math.floor((presentation.number - 1) / 15)
+                  : 0
               }
             >
-              {state?.lastDrawn ?? "—"}
+              {presentation.number ?? "—"}
             </span>
           </div>
           <p className="projection-draw-count">

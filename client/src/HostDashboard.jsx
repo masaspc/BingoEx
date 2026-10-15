@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import socket from "./socket.js";
+import useDrawPresentation from "./useDrawPresentation.js";
 import Celebration from "./Celebration.jsx";
 
 const INITIAL_STATE = {
@@ -32,10 +33,16 @@ export default function HostDashboard() {
   const [needPassword, setNeedPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [connected, setConnected] = useState(socket.connected);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [drawDisplay, setDrawDisplay] = useState(null);
-  const drawIntervalRef = useRef(null);
-  const drawFinishRef = useRef(null);
+  const presentation = useDrawPresentation(state, connected);
+  const [drawRequested, setDrawRequested] = useState(false);
+  const drawRequestRef = useRef(false);
+  const isDrawing = presentation.pending;
+  useEffect(() => {
+    if (state.draw || !connected || state.phase !== "playing") {
+      drawRequestRef.current = false;
+      setDrawRequested(false);
+    }
+  }, [state, connected]);
   const messageTimerRef = useRef(null);
   const winnerDismissRef = useRef(null);
   const serverSetupRef = useRef(null);
@@ -89,11 +96,6 @@ export default function HostDashboard() {
       if (s.phase === "setup") {
         setWinnerQueue([]);
         setShowResults(false);
-        clearInterval(drawIntervalRef.current);
-        clearTimeout(drawFinishRef.current);
-        drawIntervalRef.current = null;
-        setIsDrawing(false);
-        setDrawDisplay(null);
       }
       setPrizeNameInputs((current) => {
         if (s.phase !== "prizeInput") return current;
@@ -120,11 +122,6 @@ export default function HostDashboard() {
     const onDisconnect = () => {
       setConnected(false);
       setAuthed(false);
-      clearInterval(drawIntervalRef.current);
-      clearTimeout(drawFinishRef.current);
-      drawIntervalRef.current = null;
-      setIsDrawing(false);
-      setDrawDisplay(null);
     };
     socket.on("connect", joinHost);
     socket.on("disconnect", onDisconnect);
@@ -133,7 +130,12 @@ export default function HostDashboard() {
     socket.on("host:update", onUpdate);
     socket.on("host:newWinner", onWinner);
     socket.on("host:resultsData", downloadCSV);
-    socket.on("error:message", notify);
+    const onError = (msg) => {
+      drawRequestRef.current = false;
+      setDrawRequested(false);
+      notify(msg);
+    };
+    socket.on("error:message", onError);
     if (socket.connected) joinHost();
     return () => {
       socket.off("connect", joinHost);
@@ -143,9 +145,7 @@ export default function HostDashboard() {
       socket.off("host:update", onUpdate);
       socket.off("host:newWinner", onWinner);
       socket.off("host:resultsData", downloadCSV);
-      socket.off("error:message", notify);
-      clearInterval(drawIntervalRef.current);
-      clearTimeout(drawFinishRef.current);
+      socket.off("error:message", onError);
       clearTimeout(messageTimerRef.current);
     };
   }, [downloadCSV, notify]);
@@ -201,36 +201,21 @@ export default function HostDashboard() {
   };
   const handleDraw = () => {
     if (
-      isDrawing ||
+      drawRequestRef.current ||
+      presentation.busy ||
       !connected ||
       !authed ||
       state.phase !== "playing" ||
       state.drawnNumbers.length >= 75
     )
       return;
-    setIsDrawing(true);
-    setDrawDisplay(Math.floor(Math.random() * 75) + 1);
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    let count = 0;
-    const totalTicks = reducedMotion ? 1 : 26;
-    drawIntervalRef.current = setInterval(
-      () => {
-        if (!reducedMotion) setDrawDisplay(Math.floor(Math.random() * 75) + 1);
-        count++;
-        if (count >= totalTicks) {
-          clearInterval(drawIntervalRef.current);
-          drawIntervalRef.current = null;
-          socket.emit("host:draw");
-          drawFinishRef.current = setTimeout(() => {
-            setIsDrawing(false);
-            setDrawDisplay(null);
-          }, 250);
-        }
-      },
-      reducedMotion ? 150 : 65,
-    );
+    drawRequestRef.current = true;
+    setDrawRequested(true);
+    // Volatile: never replay an offline click on reconnect.
+    socket.timeout(3000).volatile.emit("host:draw", () => {
+      drawRequestRef.current = false;
+      setDrawRequested(false);
+    });
   };
   const handleReset = () => {
     if (
@@ -258,9 +243,13 @@ export default function HostDashboard() {
     }
   };
 
-  const displayedNumber = isDrawing ? drawDisplay : state.lastDrawn;
+  const displayedNumber = presentation.number;
   const drawPalette =
-    DRAW_PALETTE[displayedNumber ? Math.floor((displayedNumber - 1) / 15) : 0];
+    DRAW_PALETTE[
+      typeof displayedNumber === "number"
+        ? Math.floor((displayedNumber - 1) / 15)
+        : 0
+    ];
   const prizeIndices = Array.from(
     { length: state.prizeCount },
     (_, i) => i,
@@ -542,9 +531,13 @@ export default function HostDashboard() {
         <div className="host-main-wide">
           <div className="host-stage-column">
             <section
-              className={`card draw-card ${isDrawing ? "is-drawing" : ""}`}
+              className={`card draw-card draw-fx draw-fx-${presentation.phase}`}
+              data-draw-phase={presentation.phase}
               aria-label="番号の抽選"
             >
+              <span className="draw-burst" aria-hidden="true">
+                ✦
+              </span>
               <div className="draw-stage-top">
                 <span className="eyebrow">THE LUCKY NUMBER</span>
                 <span className="draw-round">
@@ -566,7 +559,7 @@ export default function HostDashboard() {
                 <div className="draw-orbit orbit-inner" />
                 <div className="draw-spotlight" />
                 <span className="draw-column-label">
-                  {displayedNumber
+                  {typeof displayedNumber === "number"
                     ? ["B", "I", "N", "G", "O"][
                         Math.floor((displayedNumber - 1) / 15)
                       ]
@@ -574,14 +567,14 @@ export default function HostDashboard() {
                 </span>
                 <div
                   className={`draw-number ${isDrawing ? "draw-spinning" : ""}`}
-                  key={isDrawing ? "drawing" : state.lastDrawn}
+                  key={`${state.draw?.id ?? "idle"}-${presentation.phase}`}
                   aria-live={isDrawing ? "off" : "polite"}
                 >
                   {displayedNumber ?? "—"}
                 </div>
                 <div className="draw-label">
-                  {isDrawing
-                    ? "ドキドキ…次の番号は？"
+                  {presentation.busy
+                    ? presentation.label
                     : state.lastDrawn
                       ? "最新の番号"
                       : "準備はいいですか？"}
@@ -594,12 +587,13 @@ export default function HostDashboard() {
                   disabled={
                     !canOperate ||
                     state.phase === "finished" ||
-                    isDrawing ||
+                    presentation.busy ||
+                    drawRequested ||
                     state.drawnNumbers.length >= 75
                   }
                 >
                   <Icon name="spark" />
-                  {isDrawing
+                  {presentation.busy || drawRequested
                     ? "抽選中..."
                     : state.phase === "finished"
                       ? "全景品の当選が確定"
